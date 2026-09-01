@@ -7,6 +7,8 @@ SRC_DIR := src
 BUILD := build
 
 BOOT := $(BUILD)/boot.bin
+STAGE1 := $(BUILD)/stage_1.bin
+STAGE2 := $(BUILD)/stage_2.bin
 KERNEL := $(BUILD)/kernel.bin
 IMAGE := $(BUILD)/os.img
 
@@ -15,14 +17,13 @@ CFLAGS := -ffreestanding -m64 -mno-red-zone \
           -Wall -Wextra
 
 ASFLAGS := -f elf64
-
 LDFLAGS := -T linker.ld
 
-C_SRC := $(shell find $(SRC_DIR) -type f -name '*.c')
-ASM_SRC := $(shell find $(SRC_DIR) -type f -name '*.s' ! -name 'boot.s')
+KERNEL_C_SRC := $(shell find $(SRC_DIR)/kernel -type f -name '*.c')
+KERNEL_ASM_SRC := $(shell find $(SRC_DIR)/kernel -type f -name '*.s')
 
-C_OBJ := $(patsubst $(SRC_DIR)/%.c,$(BUILD)/%.o,$(C_SRC))
-ASM_OBJ := $(patsubst $(SRC_DIR)/%.s,$(BUILD)/%.o,$(ASM_SRC))
+C_OBJ := $(patsubst $(SRC_DIR)/%.c,$(BUILD)/%.o,$(KERNEL_C_SRC))
+ASM_OBJ := $(patsubst $(SRC_DIR)/%.s,$(BUILD)/%.o,$(KERNEL_ASM_SRC))
 
 KERNEL_OBJ := $(C_OBJ) $(ASM_OBJ)
 
@@ -30,9 +31,17 @@ KERNEL_OBJ := $(C_OBJ) $(ASM_OBJ)
 
 all: $(IMAGE)
 
-$(BOOT): $(SRC_DIR)/boot.s
+$(BOOT): $(SRC_DIR)/bootloader/boot.s
 	@mkdir -p $(dir $@)
-	$(AS) -f bin $< -o $@
+	$(AS) -f bin -I$(SRC_DIR)/bootloader/ $< -o $@
+
+$(STAGE1): $(SRC_DIR)/bootloader/stage_1.s
+	@mkdir -p $(dir $@)
+	$(AS) -f bin -I$(SRC_DIR)/bootloader/ $< -o $@
+
+$(STAGE2): $(SRC_DIR)/bootloader/stage_2.s
+	@mkdir -p $(dir $@)
+	$(AS) -f bin -I$(SRC_DIR)/bootloader/ $< -o $@
 
 $(BUILD)/%.o: $(SRC_DIR)/%.c
 	@mkdir -p $(dir $@)
@@ -47,9 +56,9 @@ $(KERNEL): $(KERNEL_OBJ)
 	$(LD) $(LDFLAGS) -o $(BUILD)/kernel.elf $(KERNEL_OBJ)
 	$(OBJCOPY) -O binary $(BUILD)/kernel.elf $@
 
-$(IMAGE): $(BOOT) $(KERNEL)
+$(IMAGE): $(BOOT) $(STAGE1) $(STAGE2) $(KERNEL)
 	@mkdir -p $(dir $@)
-	cat $(BOOT) $(KERNEL) > $@
+	cat $(BOOT) $(STAGE1) $(STAGE2) $(KERNEL) > $@
 
 run: $(IMAGE)
 	qemu-system-x86_64 \
