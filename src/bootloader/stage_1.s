@@ -15,6 +15,49 @@ stage_1:
 
   mov si, success_msg
   call print
+
+  mov si, a20_msg
+  call print
+
+  ; Enable A20 via BIOS
+  mov ax, 0x2403 ; Query A20 Gate Support
+  int 0x15
+
+  jc .a20_not_supported
+  test ah, ah
+  jnz .a20_not_supported
+  
+  jmp .get_a20_status
+
+  .a20_not_supported:
+    mov si, a20_not_supported_msg
+    jmp .hlt
+
+  .a20_failed:
+    mov si, a20_fail_msg
+    jmp .hlt
+
+  .get_a20_status:
+    mov ax, 0x2402 ; Get A20 Gate Status
+    int 0x15
+
+    jc .a20_failed
+    test ah, ah
+    jnz .a20_failed
+
+    test al, al
+    jnz .a20_activated
+  
+  mov ax, 0x2401 ; Activate A20 Gate
+  int 0x15
+
+  jc .a20_failed
+  test ah, ah
+  jnz .a20_failed
+
+  .a20_activated:
+    mov si, a20_succ_msg
+    call print
   
   mov si, gdt_msg
   call print
@@ -209,6 +252,10 @@ GDTR:
   dd 0 ; for base storage
 
 success_msg: db "[ SUCC ] Entered Stage 1.", 0
+a20_msg: db "[ INFO ] Enabling A20...", 0
+a20_succ_msg: db "[ SUCC ] Enabled A20.", 0
+a20_fail_msg: db "[ FERR ] Failed to enable A20.", 0
+a20_not_supported_msg: db "[ FERR ] A20 is not supported.", 0
 gdt_msg: db "[ INFO ] Preparing GDT table...", 0
 null_msg: db "[ SUCC ] Encoded Null Entry to GDT.", 0
 kcode_msg: db "[ SUCC ] Encoded Kernel Code Entry to GDT.", 0
