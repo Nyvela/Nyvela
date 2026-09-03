@@ -1,4 +1,6 @@
-BITS 16
+BITS 32
+[org 0x8400]
 
 stage_2:
-  jmp $
+  cli
+  hlt

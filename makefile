@@ -62,7 +62,8 @@ $(IMAGE): $(BOOT) $(STAGE1) $(STAGE2) $(KERNEL)
 
 run: $(IMAGE)
 	qemu-system-x86_64 \
-		-drive format=raw,file=$(IMAGE)
+		-drive format=raw,file=$(IMAGE) \
+		-d int,cpu_reset,guest_errors
 
 clean:
 	rm -rf $(BUILD)
