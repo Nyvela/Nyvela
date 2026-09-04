@@ -25,7 +25,7 @@ The project aims to provide full control over the system, including:
 
 * [x] Boot from disk
 * [x] Enable protected mode
-* [ ] Enable A20
+* [x] Enable A20
 * [ ] Set up IDT
 * [ ] Enable long mode
 * [ ] Set up paging
