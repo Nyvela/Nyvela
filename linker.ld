@@ -1,4 +1,4 @@
-ENTRY(_start)
+ENTRY(kmain)
 
 SECTIONS
 {
@@ -6,22 +6,23 @@ SECTIONS
 
   .text : ALIGN(4096)
   {
-    *(.text)
+    *(.text.entry)
+    *(.text*)
   }
 
   .rodata : ALIGN(4096)
   {
-    *(.rodata)
+    *(.rodata*)
   }
 
   .data : ALIGN(4096)
   {
-    *(.data)
+    *(.data*)
   }
 
   .bss : ALIGN(4096)
   {
     *(COMMON)
-    *(.bss)
+    *(.bss*)
   }
 }

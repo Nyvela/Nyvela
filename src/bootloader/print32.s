@@ -1,49 +1,39 @@
-; void prints(char *ds:si, byte color:ah);
+; void prints(char *ds:esi, byte color:ah);
 ; string must be null-terminated
 ; cursor is stored at 0xC700 for simplicity, may be updated later
 ; this assumes screen is 80x25, but will be updated later
 prints:
   pusha
-  cld ; clear direction flag so lodsb will increment SI
+  cld ; clear direction flag so lodsb will increment ESI
   
-  mov dx, 0xB800
-  mov es, dx
-
   .loop:
     lodsb ; read byte into al
 
     test al, al
     jz .ret
 
-    push ax
-    
-    mov bx, [0xC700] ; bl = column, bh = row
-    
-    xor dx, dx
-    mov dl, bh
-    mov ax, 80
-    mul dx ; ax = row * 80
+    cmp byte [0xC700], 80
+    jb .write
 
-    mov dl, bl
-    add ax, dx
-    shl ax, 1
+    call printnl
+  
+  .write:
+    movzx ebx, word [0xC700] ; bl = column, bh = row
     
-    mov di, ax
-    pop ax
-   
-    mov byte es:[di], al
-    mov byte es:[di + 1], ah
+    movzx edx, bh
+    imul edx, 80
+
+    movzx edi, bl
+    add edi, edx
+    shl edi, 1
+    
+    add edi, 0xB8000
+
+    mov byte [edi], al
+    mov byte [edi + 1], ah
     
     inc bl
-
-    cmp bl, 80 ; check if at last column
-    jb .save_cursor
-
-    xor bl, bl ; column = 0
-    inc bh ; row++
-     
-    .save_cursor:
-      mov [0xC700], bx
+    mov [0xC700], bx
     
     jmp .loop
 
@@ -51,7 +41,7 @@ prints:
       popa
       ret
 
-; void println(char *ds:si, byte color:ah)
+; void println(char *ds:esi, byte color:ah)
 ; wrapper for prints and printnl
 println:
   call prints
@@ -61,71 +51,94 @@ println:
 ; void printnl()
 ; prints newline
 printnl:
-  inc byte [0xC701] ; row++
-  mov byte [0xC700], 0 ; column = 0
-  ret
+  pusha
+  cld
 
-; void _print_prefixed_str(char *ds:di, char *ds:si, byte colors:ax)
+  mov byte [0xC700], 0 ; column = 0
+  inc byte [0xC701] ; row++
+
+  cmp byte [0xC701], 25
+  jb .ret
+
+  mov esi, 0xB8000 + 0xA0
+  mov edi, 0xB8000
+  mov ecx, 24 * 80
+
+  rep movsw
+
+  mov edi, 0xB8000 + 24 * 0xA0
+  mov ax, 0x0720 ; ' ' with grey attribute
+  mov ecx, 80
+
+  rep stosw
+
+  mov byte [0xC701], 24
+  
+  .ret:
+    popa
+    ret
+
+; void _print_prefixed_str(char *ds:edi, char *ds:esi, byte colors:ax)
 ; al is used for prefix color, ah is used for string color. 
 ; prints string in format "[ <ds:di> ] <ds:si>". This also adds newline.
 _print_prefixed_str:
   pusha
 
-  mov bx, si
+  mov ebx, esi
   mov cx, ax
 
-  mov si, part_lbrack
+  mov esi, part_lbrack
   mov ah, 0x0F
   call prints
 
-  mov si, di
+  mov esi, edi
   mov ah, cl
   call prints
 
-  mov si, part_rbrack
+  mov esi, part_rbrack
   mov ah, 0x0F 
   call prints
 
-  mov si, bx
+  mov esi, ebx
   mov ah, ch
   call println
  
   popa
   ret
 
-; void printfail(char *ds:si, byte color:ah)
+; void printfail(char *ds:esi, byte color:ah)
 ; prints string with "[ FAIL ]" prefix
 printfail:
   mov al, 0x0C
-  mov di, part_fail
+  mov edi, part_fail
   jmp _print_prefixed_str
 
-; void printinfo(char *ds:si, byte color:ah)
+; void printinfo(char *ds:esi, byte color:ah)
 ; prints string with "[ INFO ]" prefix
 printinfo:
   mov al, 0x09
-  mov di, part_info
+  mov edi, part_info
   jmp _print_prefixed_str
 
-; void printsucc(char *ds:si, byte color:ax)
+; void printsucc(char *ds:esi, byte color:ah)
 ; prints string with "[ SUCC ]" prefix
 printsucc:
   mov al, 0x0A
-  mov di, part_succ
+  mov edi, part_succ
   jmp _print_prefixed_str
 
-; void printferr(char *ds:si, byte color:ax)
+; void printferr(char *ds:esi, byte color:ah)
 ; prints string with "[ FERR ]" prefix
 printferr:
   mov al, 0x04
-  mov di, part_ferr
+  mov edi, part_ferr
   jmp _print_prefixed_str
 
-; void printinit(char *ds:si, byte color:ax)
+; void printinit(char *ds:esi, byte color:ah)
 ; prints string with "[ INIT ]" prefix
 printinit:
   mov al, 0x0B
-  mov di, part_init
+  mov edi, part_init
   jmp _print_prefixed_str
 
 part_init: db "INIT", 0

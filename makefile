@@ -65,5 +65,12 @@ run: $(IMAGE)
 		-drive format=raw,file=$(IMAGE) \
 		-d int,cpu_reset,guest_errors
 
+debug: $(IMAGE)
+	qemu-system-x86_64 \
+		-drive format=raw,file=$(IMAGE) \
+		-d int,cpu_reset,guest_errors -D qemu.log \
+		-no-reboot -no-shutdown \
+		-s -S
+
 clean:
 	rm -rf $(BUILD)

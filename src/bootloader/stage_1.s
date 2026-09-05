@@ -14,10 +14,42 @@ stage_1:
   sti
 
   mov si, success_msg
-  call print
+  mov ah, 0x0F
+  call printsucc
+  
+  mov si, stage_2_load_msg
+  mov ah, 0x0F
+  call printinfo
+  
+  mov ah, 0x42 ; Read from disk
+  mov si, DAP_stage_2
+  mov dl, [0x7B00] ; load boot drive number
+
+  int 0x13
+  jc stage_2_disk_error
+  
+  mov si, stage_2_succ_msg
+  mov ah, 0x0F
+  call printsucc
+
+  mov si, kernel_load_msg
+  mov ah, 0x0F
+  call printinfo
+
+  mov ah, 0x42 ; Read from disk
+  mov si, DAP_kernel
+  mov dl, [0x7B00]
+
+  int 0x13
+  jc kernel_disk_error
+  
+  mov si, kernel_succ_msg
+  mov ah, 0x0F
+  call printsucc
 
   mov si, a20_msg
-  call print
+  mov ah, 0x0F
+  call printinfo
 
   ; Enable A20 via BIOS
   mov ax, 0x2403 ; Query A20 Gate Support
@@ -31,11 +63,17 @@ stage_1:
 
   .a20_not_supported:
     mov si, a20_not_supported_msg
-    jmp .hlt
+    mov ah, 0x0F
+    call printferr
+
+    jmp halt
 
   .a20_failed:
     mov si, a20_fail_msg
-    jmp .hlt
+    mov ah, 0x0F
+    call printferr
+
+    jmp halt
 
   .get_a20_status:
     mov ax, 0x2402 ; Get A20 Gate Status
@@ -57,14 +95,16 @@ stage_1:
 
   .a20_activated:
     mov si, a20_succ_msg
-    call print
+    mov ah, 0x0F
+    call printsucc
   
   mov si, gdt_msg
-  call print
+  mov ah, 0x0F
+  call printinfo
  
   ; Encode Null Entry
-  mov edi, GDT_NULL_BASE
-  mov esi, GDT_NULL_LIMIT
+  xor edi, edi
+  xor esi, esi
   mov ch, GDT_NULL_ACCESS_BYTE
   mov cl, GDT_NULL_FLAGS
   mov bx, GDT
@@ -72,7 +112,8 @@ stage_1:
   call encode_gdt_entry
 
   mov si, null_msg
-  call print
+  mov ah, 0x0F
+  call printsucc
   
   ; Encode Kernel Code Entry
   mov edi, GDT_KCODE_BASE
@@ -84,7 +125,8 @@ stage_1:
   call encode_gdt_entry
   
   mov si, kcode_msg
-  call print
+  mov ah, 0x0F
+  call printsucc
 
   ; Encode Kernel Data Entry
   mov edi, GDT_KDATA_BASE
@@ -96,7 +138,8 @@ stage_1:
   call encode_gdt_entry
   
   mov si, kdata_msg
-  call print
+  mov ah, 0x0F
+  call printsucc
 
   ; Encode User Code Entry
   mov edi, GDT_UCODE_BASE
@@ -108,7 +151,8 @@ stage_1:
   call encode_gdt_entry
     
   mov si, ucode_msg
-  call print
+  mov ah, 0x0F
+  call printsucc
   
   ; Encode User Data Entry
   mov edi, GDT_UDATA_BASE
@@ -120,10 +164,24 @@ stage_1:
   call encode_gdt_entry
   
   mov si, udata_msg
-  call print
+  mov ah, 0x0F
+  call printsucc
+  
+  mov edi, GDT_KCODE_LM_BASE
+  mov esi, GDT_KCODE_LM_LIMIT
+  mov ch, GDT_KCODE_LM_ACCESS_BYTE
+  mov cl, GDT_KCODE_LM_FLAGS
+  mov bx, GDT + 40
+
+  call encode_gdt_entry
+  
+  mov si, kcode_lm_msg
+  mov ah, 0x0F
+  call printsucc
 
   mov si, gdt_setup_msg
-  call print
+  mov ah, 0x0F
+  call printinfo
   
   cli
 
@@ -137,23 +195,39 @@ stage_1:
   lgdt [GDTR]
 
   mov si, gdt_succ_msg
-  call print
+  mov ah, 0x0F
+  call printsucc
 
   mov si, prot_mode_msg
-  call print
-   
+  mov ah, 0x0F
+  call printinfo
+ 
   ; Enable protected mode
   mov eax, cr0
   or eax, 1
   mov cr0, eax
   
-  jmp dword 0x08:protected_mode_entry
+  jmp 0x08:protected_mode_entry
+
+  stage_2_disk_error:
+    mov si, stage_2_err_msg
+    mov ah, 0x0F
+    call printferr
+    jmp halt
+
+  kernel_disk_error:
+    mov si, kernel_err_msg
+    mov ah, 0x0F
+    call printferr
+    jmp halt
   
-  .hlt:
+  halt:
     hlt
-    jmp .hlt
+    jmp halt
 
 protected_mode_entry:
+  BITS 32
+  
   ; Reload segments and jump to stage 2
   mov ax, 0x10
   mov ds, ax
@@ -162,7 +236,9 @@ protected_mode_entry:
   mov gs, ax
   mov ss, ax
 
-  jmp dword 0x8400
+  jmp dword 0x8600
+
+BITS 16
 
 %include "print.s"
 
@@ -174,13 +250,11 @@ encode_gdt_entry:
   mov [bx], al
 
   ; byte 1 = (limit >> 8) & 0xFF
-  mov eax, esi
   shr eax, 8
   mov [bx + 1], al
 
   ; byte 6 = (limit >> 16) & 0x0F
-  mov eax, esi 
-  shr eax, 16
+  shr eax, 8
   and eax, 0x0F
   mov [bx + 6], al
 
@@ -190,18 +264,15 @@ encode_gdt_entry:
   mov [bx + 2], al
 
   ; byte 3 = (base >> 8) & 0xFF
-  mov eax, edi
   shr eax, 8
   mov [bx + 3], al
 
   ; byte 4 = (base >> 16) & 0xFF
-  mov eax, edi
-  shr eax, 16
+  shr eax, 8
   mov [bx + 4], al
 
   ; byte 7 = (base >> 24) & 0xFF
-  mov eax, edi
-  shr eax, 24
+  shr eax, 8
   mov [bx + 7], al
   
   ; Encode the access byte
@@ -239,31 +310,64 @@ GDT_UDATA_LIMIT equ 0xFFFFF
 GDT_UDATA_ACCESS_BYTE equ 0xF2
 GDT_UDATA_FLAGS equ 0xC
 
+GDT_KCODE_LM_BASE equ 0x0
+GDT_KCODE_LM_LIMIT equ 0xFFFFF
+GDT_KCODE_LM_ACCESS_BYTE equ 0x9A
+GDT_KCODE_LM_FLAGS equ 0xA
+
 GDT:
   dq 0 ; Null
   dq 0 ; Kernel Code
   dq 0 ; Kernel Data
   dq 0 ; User Code
   dq 0 ; User Data
+  dq 0 ; Kernel Code (x64)
 GDT_END:
 
 GDTR:
   dw 0 ; for limit storage
   dd 0 ; for base storage
 
-success_msg: db "[ SUCC ] Entered Stage 1.", 0
-a20_msg: db "[ INFO ] Enabling A20...", 0
-a20_succ_msg: db "[ SUCC ] Enabled A20.", 0
-a20_fail_msg: db "[ FERR ] Failed to enable A20.", 0
-a20_not_supported_msg: db "[ FERR ] A20 is not supported.", 0
-gdt_msg: db "[ INFO ] Preparing GDT table...", 0
-null_msg: db "[ SUCC ] Encoded Null Entry to GDT.", 0
-kcode_msg: db "[ SUCC ] Encoded Kernel Code Entry to GDT.", 0
-kdata_msg: db "[ SUCC ] Encoded Kernel Data Entry to GDT.", 0
-udata_msg: db "[ SUCC ] Encoded User Data Entry to GDT.", 0
-ucode_msg: db "[ SUCC ] Encoded User Code Entry to GDT.", 0
-gdt_setup_msg: db "[ INFO ] Setting GDT table...", 0
-gdt_succ_msg: db "[ SUCC ] Set GDT table.", 0
-prot_mode_msg: db "[ INFO ] Enabling protected mode and jumping to Stage 2...", 0
+success_msg: db "Entered Stage 1.", 0
+stage_2_load_msg: db "Loading Stage 2 to memory...", 0
+stage_2_succ_msg: db "Loaded Stage 2 to memory.", 0
+stage_2_err_msg: db "Failed to load Stage 2 to memory.", 0
+kernel_load_msg: db "Loading Kernel to memory...", 0
+kernel_succ_msg: db "Loaded Kernel to memory.", 0
+kernel_err_msg: db "Failed to load Kernel to memory.", 0
+a20_msg: db "Enabling A20...", 0
+a20_succ_msg: db "Enabled A20.", 0
+a20_fail_msg: db "Failed to enable A20.", 0
+a20_not_supported_msg: db "A20 is not supported.", 0
+gdt_msg: db "Preparing GDT...", 0
+null_msg: db "Encoded Null Entry to GDT.", 0
+kcode_msg: db "Encoded Kernel Code Entry to GDT.", 0
+kdata_msg: db "Encoded Kernel Data Entry to GDT.", 0
+udata_msg: db "Encoded User Data Entry to GDT.", 0
+ucode_msg: db "Encoded User Code Entry to GDT.", 0
+kcode_lm_msg: db "Encoded Kernel Code (x64) Entry to GDT.", 0
+gdt_setup_msg: db "Setting GDT...", 0
+gdt_succ_msg: db "Set GDT.", 0
+prot_mode_msg: db "Entering protected mode...", 0
 
-times 1024 - ($ - $$) db 0 ; pad to 2 sectors
+DAP_stage_2: ; Disk Address Packet, required for BIOS's INT13h extensions
+  db 0x10 ; Size of packet
+  db 0x0 ; Always 0 for some reason
+  dw 0x0020 ; 32 sectors to read, 16384 bytes size cap for stage 2
+  
+  ; Physical address for where to load data, long jump here
+  dw 0x0000 ; offset
+  dw 0x0860 ; segment
+  
+  dq 0x04 ; LBA
+
+DAP_kernel: ; Disk Address Packet, required for BIOS's INT13h extensions
+  db 0x10
+  db 0x0
+  dw 0x0011 ; 17 sectors to read, 8704 bytes size cap for kernel
+
+  dw 0x0000
+  dw 0x1000 ; load to 0x10000, copy to 0x100000 in long mode
+  dq 0x24 
+
+times 3 * 512 - ($ - $$) db 0 ; pad to 3 sectors
