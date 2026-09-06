@@ -59,5 +59,14 @@ void kmain() {
 
   klog_ram_data();
   
+  kprintinfo("Initializing PMM...", 0x0F);
+
+  if (!kpmm_init()) {
+    kprintferr("Failed to initialize PMM.", 0x0F);
+    __asm__ volatile ("cli\nhlt");
+  }
+  
+  kprintsucc("Initialized PMM.", 0x0F);
+
   __asm__ volatile ("cli\nhlt");
 }
