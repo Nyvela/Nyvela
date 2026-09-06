@@ -52,7 +52,7 @@ void kprintnl() {
 
 void _print_prefixed_str(const char *s, const char *prefix, const uint16_t colors) {
   kprints(part_lbrack, 0x0F);
-  kprints(prefix, colors & 0xFF);
+  kprints(prefix, (uint8_t)(colors >> 8));
   kprints(part_rbrack, 0x0F);
   kprints(s, colors & 0x00FF);
 }

@@ -6,7 +6,7 @@ Nyvela is an experimental operating system focused on understanding and implemen
 
 ## Goals
 
-The goal of Nyvela is to build a fully usable operating system from scratch, without relying on prebuilt operating system components or third-party libraries for core functionality.
+The goal of Nyvela is to build a fully usable operating system from scratch, without relying on prebuilt operating system components or third-party libraries for core functionality. It pursues a microkernel architecture for stability, keeping the privileged kernel minimal and isolating drivers, filesystems, and other core services in userspace.
 
 The project aims to provide full control over the system, including:
 
@@ -26,10 +26,10 @@ The project aims to provide full control over the system, including:
 * [x] Boot from disk
 * [x] Enable protected mode
 * [x] Enable A20
-* [ ] Set up IDT
-* [ ] Enable long mode
-* [ ] Set up paging
-* [ ] Load kernel
+* [x] Set up IDT
+* [x] Enable long mode
+* [x] Set up paging
+* [x] Load kernel
 
 ### Kernel
 
