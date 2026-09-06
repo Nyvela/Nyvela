@@ -1,6 +1,6 @@
 ; void prints(char *ds:esi, byte color:ah);
 ; string must be null-terminated
-; cursor is stored at 0xC700 for simplicity, may be updated later
+; cursor is stored at 0xC800 for simplicity, may be updated later
 ; this assumes screen is 80x25, but will be updated later
 prints:
   pusha
@@ -12,13 +12,13 @@ prints:
     test al, al
     jz .ret
 
-    cmp byte [0xC700], 80
+    cmp byte [0xC800], 80
     jb .write
 
     call printnl
   
   .write:
-    movzx ebx, word [0xC700] ; bl = column, bh = row
+    movzx ebx, word [0xC800] ; bl = column, bh = row
     
     movzx edx, bh
     imul edx, 80
@@ -33,7 +33,7 @@ prints:
     mov byte [edi + 1], ah
     
     inc bl
-    mov [0xC700], bx
+    mov [0xC800], bx
     
     jmp .loop
 
@@ -54,10 +54,10 @@ printnl:
   pusha
   cld
 
-  mov byte [0xC700], 0 ; column = 0
-  inc byte [0xC701] ; row++
+  mov byte [0xC800], 0 ; column = 0
+  inc byte [0xC801] ; row++
 
-  cmp byte [0xC701], 25
+  cmp byte [0xC801], 25
   jb .ret
 
   mov esi, 0xB8000 + 0xA0
@@ -72,7 +72,7 @@ printnl:
 
   rep stosw
 
-  mov byte [0xC701], 24
+  mov byte [0xC801], 24
   
   .ret:
     popa

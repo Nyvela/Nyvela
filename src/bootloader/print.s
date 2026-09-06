@@ -1,6 +1,6 @@
 ; void prints(char *ds:si, byte color:ah);
 ; string must be null-terminated
-; cursor is stored at 0xC700 for simplicity, may be updated later
+; cursor is stored at 0xC800 for simplicity, may be updated later
 ; this assumes screen is 80x25, but will be updated later
 prints:
   pusha
@@ -17,7 +17,7 @@ prints:
 
     push ax
     
-    mov bx, [0xC700] ; bl = column, bh = row
+    mov bx, [0xC800] ; bl = column, bh = row
     
     xor dx, dx
     mov dl, bh
@@ -43,7 +43,7 @@ prints:
     inc bh ; row++
      
     .save_cursor:
-      mov [0xC700], bx
+      mov [0xC800], bx
     
     jmp .loop
 
@@ -61,8 +61,8 @@ println:
 ; void printnl()
 ; prints newline
 printnl:
-  inc byte [0xC701] ; row++
-  mov byte [0xC700], 0 ; column = 0
+  inc byte [0xC801] ; row++
+  mov byte [0xC800], 0 ; column = 0
   ret
 
 ; void _print_prefixed_str(char *ds:di, char *ds:si, byte colors:ax)

@@ -1,5 +1,5 @@
 BITS 32
-[org 0x8600]
+[org 0x8800]
 
 stage_2:
   cli
@@ -233,9 +233,8 @@ IDT_END:
 IDTR:
   dw IDT_END - IDT - 1
   dd IDT
-  dd 0 ; high 32 bits for 64-bit lidt (zero-extended)
 
-times ((0x1000 - (($ - $$ + 0x8600) % 0x1000)) % 0x1000) db 0
+times ((0x1000 - (($ - $$ + 0x8800) % 0x1000)) % 0x1000) db 0
 pml4_table:
   times 512 dq 0
 

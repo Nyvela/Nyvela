@@ -13,7 +13,7 @@ _start:
 
   xor ax, ax
   mov ds, ax
-  mov dword [0xC700], eax
+  mov dword [0xC800], eax
 
   sti
 
@@ -54,7 +54,7 @@ _start:
 DAP: ; Disk Address Packet, required for BIOS's INT13h extensions
   db 0x10 ; Size of packet
   db 0x0 ; Always 0 for some reason
-  dw 0x0003 ; 2 sectors to read, 1536 bytes size cap for stage 1
+  dw 0x0004 ; 4 sectors to read, 2048 bytes size cap for stage 1
   
   ; Physical address for where to load data, long jump here
   dw 0x0000 ; offset

@@ -46,6 +46,90 @@ stage_1:
   mov si, kernel_succ_msg
   mov ah, 0x0F
   call printsucc
+  
+  mov si, obtaining_bios_mem_map
+  mov ah, 0x0F
+  call printinfo
+  
+  xor ax, ax
+  mov es, ax
+
+  ; Read the BIOS memory map
+  mov di, MMAP_ADDR ; without this BIOS would get stuck after some entries are fetched
+  xor ebx, ebx ; must be set to 0
+  xor bp, bp ; entry count
+  mov edx, 0x0534D4150 ; "SMAP"
+  mov eax, 0xE820
+  mov [es:di + 20], dword 1 ; force a valid ACPI 3.x entry
+  mov ecx, 24 ; we need 24 bytes
+  
+  int 0x15
+  jc short .bios_mmap_unsupported
+  
+  mov edx, 0x0534D4150 ; some BIOSes trash this register
+  cmp eax, edx ; on success eax must be set to "SMAP"
+  jne short .bios_mmap_failed
+  
+  test ebx, ebx ; ebx = 0 means list is 1 entry long which is useless
+  je short .bios_mmap_failed
+
+  jmp short .bios_mmap_jmpin
+
+  .bios_mmap_unsupported:
+    mov si, unsupported_bios_mem_map
+    mov ah, 0x0F
+    call printferr
+
+    jmp halt
+
+  .bios_mmap_failed:
+    mov si, fail_bios_mem_map
+    mov ah, 0x0F
+    call printferr
+
+    jmp halt
+
+  .e820_loop:
+    cmp bp, MMAP_ENTRIES_MAX
+    jae .e820f
+
+    mov eax, 0xE820 ; eax, ecx trashed on every INT 15h call
+    mov [es:di + 20], dword 1 ; force a valid ACPI 3.x entry
+    mov ecx, 24 ; ask for 24 bytes again
+
+    int 0x15
+    jc short .e820f ; carry set means list is finished
+    
+    mov edx, 0x0534D4150
+
+  .bios_mmap_jmpin:
+    jcxz .bios_mmap_skipent ; skip any 0 length entries
+    cmp cl, 20 ; check if we got valid 24 byte ACPI 3.x response
+    jbe short .bios_mmap_notext
+    test byte [es:di + 20], 1 ; is "ignore this data" bit clear?
+    je short .bios_mmap_skipent
+
+  .bios_mmap_notext:
+    mov ecx, [es:di + 8] ; get lower uint32_t of memory region length
+    or ecx, [es:di + 12] ; "or" it with upper uint32_t to test for zero
+    jz .bios_mmap_skipent ; if length uint64_t is 0 skip entry
+    inc bp ; got a good entry
+    add di, 24
+
+  .bios_mmap_skipent:
+    test ebx, ebx ; if ebx resets to 0, list is complete
+    jne short .e820_loop
+  
+  .e820f:
+    mov [es:MMAP_COUNT], bp ; store the entry count
+    clc ; clear carry flag
+
+  mov ax, 0x0800
+  mov es, ax
+
+  mov si, obtained_bios_mem_map
+  mov ah, 0x0F
+  call printsucc 
 
   mov si, a20_msg
   mov ah, 0x0F
@@ -236,7 +320,7 @@ protected_mode_entry:
   mov gs, ax
   mov ss, ax
 
-  jmp dword 0x8600
+  jmp dword 0x8800
 
 BITS 16
 
@@ -335,6 +419,10 @@ stage_2_err_msg: db "Failed to load Stage 2 to memory.", 0
 kernel_load_msg: db "Loading Kernel to memory...", 0
 kernel_succ_msg: db "Loaded Kernel to memory.", 0
 kernel_err_msg: db "Failed to load Kernel to memory.", 0
+obtaining_bios_mem_map: db "Obtainining the BIOS memory map...", 0
+obtained_bios_mem_map: db "Obtained the BIOS memory map.", 0
+fail_bios_mem_map: db "Failed to obtain the BIOS memory map.", 0
+unsupported_bios_mem_map: db "Failed to obtain the BIOS memory map. (unsupported)", 0
 a20_msg: db "Enabling A20...", 0
 a20_succ_msg: db "Enabled A20.", 0
 a20_fail_msg: db "Failed to enable A20.", 0
@@ -350,6 +438,10 @@ gdt_setup_msg: db "Setting GDT...", 0
 gdt_succ_msg: db "Set GDT.", 0
 prot_mode_msg: db "Entering protected mode...", 0
 
+MMAP_ADDR equ 0xD000 ; ends at 0xFFFF
+MMAP_COUNT equ 0xCFFE
+MMAP_ENTRIES_MAX equ 512
+
 DAP_stage_2: ; Disk Address Packet, required for BIOS's INT13h extensions
   db 0x10 ; Size of packet
   db 0x0 ; Always 0 for some reason
@@ -357,9 +449,9 @@ DAP_stage_2: ; Disk Address Packet, required for BIOS's INT13h extensions
   
   ; Physical address for where to load data, long jump here
   dw 0x0000 ; offset
-  dw 0x0860 ; segment
+  dw 0x0880 ; segment
   
-  dq 0x04 ; LBA
+  dq 0x05 ; LBA
 
 DAP_kernel: ; Disk Address Packet, required for BIOS's INT13h extensions
   db 0x10
@@ -368,6 +460,6 @@ DAP_kernel: ; Disk Address Packet, required for BIOS's INT13h extensions
 
   dw 0x0000
   dw 0x1000 ; load to 0x10000, copy to 0x100000 in long mode
-  dq 0x24 
+  dq 0x25
 
-times 3 * 512 - ($ - $$) db 0 ; pad to 3 sectors
+times 4 * 512 - ($ - $$) db 0 ; pad to 4 sectors

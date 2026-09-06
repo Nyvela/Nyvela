@@ -1,0 +1,36 @@
+#ifndef NYVMEM_H
+#define NYVMEM_H
+
+#include <stddef.h>
+#include <stdint.h>
+
+typedef enum e820_type_t {
+  E820_USABLE = 1,
+  E820_RESERVED,
+  E820_ACPI_RECLAIMABLE,
+  E820_ACPI_NVS,
+  E820_BAD_MEM
+} e820_type_t;
+
+typedef struct e820_entry_t {
+  uint64_t base_addr;
+  uint64_t length_in_bytes;
+  e820_type_t type;
+  uint32_t extended_attributes;
+} e820_entry_t;
+
+_Static_assert(sizeof(e820_entry_t) == 24, "Invalid E820 entry size");
+
+typedef struct block_t {
+  size_t size;
+  bool isUsed;
+  struct block_t* next;
+} block_t;
+
+void* kmalloc(size_t size);
+void kfree(void* ptr);
+
+extern size_t* MMAP_COUNT;
+extern e820_entry_t* MMAP_ENTRIES;
+
+#endif // NYVMEM_H
