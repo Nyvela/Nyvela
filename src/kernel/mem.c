@@ -1,5 +1,6 @@
 #include "mem.h"
 #include "utils.h"
+#include "io.h"
 
 extern uint8_t kernel_end;
 
@@ -48,6 +49,47 @@ bool kpmm_init() {
   }
 
   return true;
+}
+
+void* kpalloc() {
+  const uint64_t first_page = ((uint64_t)&kernel_end + 4095) / 4096;
+  const uint64_t last_page = FRAME_COUNT;
+
+  for (uint64_t page = first_page; page < last_page; page++) {
+    if (BITMAP[page / 8] & (BITMAP_FREE << (page % 8))) {
+      BITMAP[page / 8] &= ~(BITMAP_FREE << (page % 8));
+      return (void*)(page * 0x1000);
+    }
+  }
+
+  return NULL;
+}
+
+void kpfree(void* page) {
+  if (!page) return; 
+  
+  uint64_t page_addr = (uint64_t)page;
+  
+  if (page_addr % 0x1000 != 0) {
+    kprintferr("Invalid kpfree.", 0x0F);
+    __asm__ volatile ("cli\nhlt");
+  }
+
+  uint64_t frame = page_addr / 0x1000;
+
+  if (frame >= FRAME_COUNT) {
+    kprintferr("Invalid kpfree.", 0x0F);
+    __asm__ volatile("cli\nhlt");
+  }
+
+  uint8_t is_used = !(BITMAP[frame / 8] & (BITMAP_FREE << (frame % 8)));
+
+  if (!is_used) {
+    kprintferr("Invalid kpfree.", 0x0F);
+    __asm__ volatile("cli\nhlt");
+  }
+
+  BITMAP[frame / 8] |= (BITMAP_FREE << (frame % 8));
 }
 
 void* kmalloc(size_t size) {

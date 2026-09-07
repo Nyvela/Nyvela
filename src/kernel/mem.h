@@ -33,6 +33,10 @@ typedef struct block_t {
 } block_t;
 
 bool kpmm_init();
+bool kvmm_init();
+
+void* kpalloc();
+void kpfree(void* page);
 
 void* kmalloc(size_t size);
 void kfree(void* ptr);

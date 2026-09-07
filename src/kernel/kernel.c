@@ -53,6 +53,32 @@ void klog_ram_data() {
   }
 }
 
+void ktest_palloc() {
+  void* mem = kpalloc();
+
+  if (!mem) {
+    kprintferr("Failed to allocate page.", 0x0F);
+    __asm__ volatile ("cli\nhlt");
+  }
+
+  char buf[21];
+
+  if (!ki64toa((uint64_t)mem, buf, sizeof(buf))) {
+    kprintfail("Failed to convert allocated memory address to string.", 0x0F);
+  } else {
+    // "Allocated memory address: " 
+    char tmp[27 + sizeof(buf) + 1] = {0};
+
+    memcpy(tmp, "Allocated memory address: ", 26);
+    memcpy(tmp + 26, buf, 21);
+
+    kprintinfo(tmp, 0x0F);
+  }
+
+  kpfree(mem);
+  kprintinfo("Free'd allocated memory.", 0x0F);
+}
+
 __attribute__((section(".text.entry")))
 void kmain() {
   kprintsucc("Entered Kernel in long mode.", 0x0F);
@@ -67,6 +93,8 @@ void kmain() {
   }
   
   kprintsucc("Initialized PMM.", 0x0F);
+ 
+  ktest_palloc();
 
   __asm__ volatile ("cli\nhlt");
 }
