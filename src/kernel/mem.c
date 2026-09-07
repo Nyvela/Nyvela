@@ -128,6 +128,60 @@ bool kvmm_init() {
   return true;
 }
 
+bool kvmunmap(uint64_t virt) { 
+  uint64_t cr3;
+  __asm__ volatile ("mov %%cr3, %0" : "=r"(cr3));
+  
+  uint64_t pml4_index = (virt >> 39) & 0x1FFULL;
+  uint64_t pdpt_index = (virt >> 30) & 0x1FFULL;
+  uint64_t pd_index = (virt >> 21) & 0x1FFULL;
+  uint64_t pt_index = (virt >> 12) & 0x1FFULL;
+  
+  uint64_t pml4_phys = cr3 & ~0xFFFULL;
+  uint64_t *pml4 = (uint64_t*)pml4_phys;
+
+  uint64_t pml4e = pml4[pml4_index];
+  
+  uint64_t pdpt_phys;
+  uint64_t *pdpt;
+
+  if (!(pml4e & 1)) {
+    return false;
+  } else {
+    pdpt_phys = pml4e & ~0xFFFULL;
+    pdpt = (uint64_t*)pdpt_phys;
+  }
+  
+  uint64_t pdpte = pdpt[pdpt_index];
+  
+  uint64_t pd_phys;
+  uint64_t *pd;
+
+  if (!(pdpte & 1)) {
+    return false;
+  } else {
+    pd_phys = pdpte & ~0xFFFULL;
+    pd = (uint64_t*)pd_phys;
+  }
+  
+  uint64_t pde = pd[pd_index];
+
+  uint64_t pt_phys;
+  uint64_t *pt;
+  
+  if (!(pde & 1)) {
+    return false;
+  } else {
+    pt_phys = pde & ~0xFFFULL;
+    pt = (uint64_t*)pt_phys;
+  }
+
+  pt[pt_index] = 0;
+  __asm__ volatile ("mov %0, %%cr3" :: "r"(cr3) : "memory");
+
+  return true;
+}
+
 bool kvmmap(uint64_t virt, uint64_t phys, uint64_t flags) { 
   uint64_t cr3;
   __asm__ volatile ("mov %%cr3, %0" : "=r"(cr3));

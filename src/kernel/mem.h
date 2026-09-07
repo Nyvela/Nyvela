@@ -42,6 +42,7 @@ void* kmalloc(size_t size);
 void kfree(void* ptr);
 
 bool kvmmap(uint64_t virt, uint64_t phys, uint64_t flags);
+bool kvmunmap(uint64_t virt);
 
 extern size_t* MMAP_COUNT;
 extern e820_entry_t* MMAP_ENTRIES;

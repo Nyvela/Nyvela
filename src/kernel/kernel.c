@@ -83,19 +83,60 @@ void ktest_vmmap() {
   uint64_t phys = (uint64_t)kpalloc();
   uint64_t virt = 0x100000000;
 
+  if (!phys) {
+    kprintferr("Failed to allocate test page", 0x0F);
+    return;
+  }
+
   *(volatile uint64_t*)phys = 0x1111222233334444;
 
-  kvmmap(virt, phys, 0x03);
+  if (!kvmmap(virt, phys, 0x03)) {
+    kprintferr("kvmmap failed", 0x0F);
+    return;
+  }
 
-  if (*(volatile uint64_t*)virt != 0x1111222233334444)
-      kprintferr("VMM failed", 0x0F);
+  if (*(volatile uint64_t*)virt != 0x1111222233334444) {
+    kprintferr("VMM mapping failed", 0x0F);
+    return;
+  }
 
   *(volatile uint64_t*)virt = 0xAAAABBBBCCCCDDDD;
 
-  if (*(volatile uint64_t*)phys != 0xAAAABBBBCCCCDDDD)
-      kprintferr("VMM failed", 0x0F);
+  if (*(volatile uint64_t*)phys != 0xAAAABBBBCCCCDDDD) {
+    kprintferr("VMM mapping failed", 0x0F);
+    return;
+  }
 
-  kprintsucc("VMM works!", 0x0F);
+  kprintsucc("kvmmap works!", 0x0F);
+
+  if (!kvmunmap(virt)) {
+    kprintferr("kunmap failed", 0x0F);
+    return;
+  }
+
+  uint64_t cr3;
+  __asm__ volatile ("mov %%cr3, %0" : "=r"(cr3));
+
+  uint64_t *pml4 = (uint64_t*)(cr3 & ~0xFFFULL);
+
+  uint64_t pml4_index = (virt >> 39) & 0x1FFULL;
+  uint64_t pdpt_index = (virt >> 30) & 0x1FFULL;
+  uint64_t pd_index = (virt >> 21) & 0x1FFULL;
+  uint64_t pt_index = (virt >> 12) & 0x1FFULL;
+
+  uint64_t *pdpt = (uint64_t*)(pml4[pml4_index] & ~0xFFFULL);
+
+  uint64_t *pd = (uint64_t*)(pdpt[pdpt_index] & ~0xFFFULL);
+
+  uint64_t *pt = (uint64_t*)(pd[pd_index] & ~0xFFFULL);
+
+  if (pt[pt_index] & 1) {
+    kprintferr("kunmap failed: PTE still present", 0x0F);
+    return;
+  }
+
+  kprintsucc("kunmap works!", 0x0F);
+  kpfree((void*)phys);
 }
 
 __attribute__((section(".text.entry")))
