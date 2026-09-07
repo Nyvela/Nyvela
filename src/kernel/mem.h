@@ -41,6 +41,8 @@ void kpfree(void* page);
 void* kmalloc(size_t size);
 void kfree(void* ptr);
 
+bool kvmmap(uint64_t virt, uint64_t phys, uint64_t flags);
+
 extern size_t* MMAP_COUNT;
 extern e820_entry_t* MMAP_ENTRIES;
 extern uint8_t* BITMAP;

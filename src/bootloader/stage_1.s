@@ -456,7 +456,7 @@ DAP_stage_2: ; Disk Address Packet, required for BIOS's INT13h extensions
 DAP_kernel: ; Disk Address Packet, required for BIOS's INT13h extensions
   db 0x10
   db 0x0
-  dw 0x0011 ; 17 sectors to read, 8704 bytes size cap for kernel
+  dw 0x0019 ; 25 sectors to read, 12800 bytes size cap for kernel
 
   dw 0x0000
   dw 0x1000 ; load to 0x10000, copy to 0x100000 in long mode

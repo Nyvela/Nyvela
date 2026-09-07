@@ -79,6 +79,25 @@ void ktest_palloc() {
   kprintinfo("Free'd allocated memory.", 0x0F);
 }
 
+void ktest_vmmap() {
+  uint64_t phys = (uint64_t)kpalloc();
+  uint64_t virt = 0x100000000;
+
+  *(volatile uint64_t*)phys = 0x1111222233334444;
+
+  kvmmap(virt, phys, 0x03);
+
+  if (*(volatile uint64_t*)virt != 0x1111222233334444)
+      kprintferr("VMM failed", 0x0F);
+
+  *(volatile uint64_t*)virt = 0xAAAABBBBCCCCDDDD;
+
+  if (*(volatile uint64_t*)phys != 0xAAAABBBBCCCCDDDD)
+      kprintferr("VMM failed", 0x0F);
+
+  kprintsucc("VMM works!", 0x0F);
+}
+
 __attribute__((section(".text.entry")))
 void kmain() {
   kprintsucc("Entered Kernel in long mode.", 0x0F);
@@ -93,8 +112,18 @@ void kmain() {
   }
   
   kprintsucc("Initialized PMM.", 0x0F);
- 
+  
   ktest_palloc();
+  
+  if (!kvmm_init()) {
+    kprintferr("Failed to initialize VMM.", 0x0F);
+    __asm__ volatile ("cli\nhlt");
+  }
+
+  kprintsucc("Initialized VMM.", 0x0F);
+
+  ktest_palloc();
+  ktest_vmmap();
 
   __asm__ volatile ("cli\nhlt");
 }

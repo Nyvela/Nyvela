@@ -224,7 +224,7 @@ updated_pml4: db "Updated PML4 table.", 0
 entering_long_mode: db "Entering long mode...", 0
 entered_long_mode: db "Entered long mode.", 0
 
-KERNEL_SIZE_IN_SECTORS equ 17
+KERNEL_SIZE_IN_SECTORS equ 25
 
 IDT: ; Interrupt Descriptor Table
   times 14 dq 0, 0
