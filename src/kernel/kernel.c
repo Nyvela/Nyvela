@@ -53,6 +53,55 @@ void klog_ram_data() {
   }
 }
 
+void ktest_kmalloc() {
+  void* a = kmalloc(64);
+
+  if (!a) {
+    kprintferr("kmalloc failed.", 0x0F);
+    return;
+  }
+
+  kprintsucc("kmalloc allocated 64 bytes.", 0x0F);
+
+  *(uint64_t*)a = 0x1111222233334444;
+
+  if (*(uint64_t*)a != 0x1111222233334444) {
+    kprintferr("kmalloc memory write failed.", 0x0F);
+    return;
+  }
+
+  void* b = kmalloc(128);
+
+  if (!b) {
+    kprintferr("Second kmalloc failed.", 0x0F);
+    return;
+  }
+
+  kprintsucc("Second kmalloc succeeded.", 0x0F);
+
+  if (a == b) {
+    kprintferr("kmalloc returned overlapping blocks.", 0x0F);
+    return;
+  }
+
+  kfree(a);
+  kprintsucc("kfree succeeded.", 0x0F);
+
+  void* c = kmalloc(32);
+
+  if (!c) {
+    kprintferr("kmalloc failed to reuse freed block.", 0x0F);
+    return;
+  }
+
+  kprintsucc("kmalloc reused freed memory.", 0x0F);
+
+  kfree(b);
+  kfree(c);
+
+  kprintsucc("kmalloc/kfree test passed!", 0x0F);
+}
+
 void ktest_palloc() {
   void* mem = kpalloc();
 
@@ -165,6 +214,15 @@ void kmain() {
 
   ktest_palloc();
   ktest_vmmap();
+  
+  if (!kmalloc_init()) {
+    kprintferr("Failed to initialize kmalloc.", 0x0F);
+    __asm__ volatile ("cli\nhlt");
+  }
+
+  kprintsucc("Initialized kmalloc.", 0x0F);
+
+  ktest_kmalloc();
 
   __asm__ volatile ("cli\nhlt");
 }

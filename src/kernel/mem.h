@@ -27,18 +27,19 @@ typedef struct e820_entry_t {
 _Static_assert(sizeof(e820_entry_t) == 24, "Invalid E820 entry size");
 
 typedef struct block_t {
-  size_t size;
-  bool isUsed;
+  uint64_t size;
+  bool is_used;
   struct block_t* next;
 } block_t;
 
 bool kpmm_init();
 bool kvmm_init();
+bool kmalloc_init();
 
 void* kpalloc();
 void kpfree(void* page);
 
-void* kmalloc(size_t size);
+void* kmalloc(uint64_t size);
 void kfree(void* ptr);
 
 bool kvmmap(uint64_t virt, uint64_t phys, uint64_t flags);
