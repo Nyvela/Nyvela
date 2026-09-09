@@ -27,7 +27,7 @@ ASM_OBJ := $(patsubst $(SRC_DIR)/%.s,$(BUILD)/%.o,$(KERNEL_ASM_SRC))
 
 KERNEL_OBJ := $(C_OBJ) $(ASM_OBJ)
 
-.PHONY: all clean run
+.PHONY: all clean run debug
 
 all: $(IMAGE)
 
