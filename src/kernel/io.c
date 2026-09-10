@@ -1,4 +1,4 @@
-#include "io.h"
+#include "../../include/kernel/io.h"
 
 volatile uint8_t* VGA_MEM = (volatile uint8_t*)0xB8000;
 

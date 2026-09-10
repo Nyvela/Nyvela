@@ -38,12 +38,14 @@ save_context:
  
   mov [ctx_ptr], rax
   mov rdi, [ctx_ptr] ; dereference
+  
+  mov rdx, [RSP_REG]
 
   pop rax
   mov [rdi], rax
   
   mov rax, rdi
-
+  
   pop rdi
   mov [rax + UINT64_T_SIZE * 1], rdi
 
@@ -89,8 +91,13 @@ save_context:
   pop r15
   mov [rax + UINT64_T_SIZE * 15], r15
   
-  ; rip
-  ; rflags
+  mov rdx, [RSP_REG]
+  mov [rax + UINT64_T_SIZE * 16], rdx
+
+  pushfq
+  pop rdx
+
+  mov [rax + UINT64_T_SIZE * 17], rdx
 
   mov rdx, cr3
   mov [rax + UINT64_T_SIZE * 18], rdx
@@ -98,5 +105,6 @@ save_context:
   ret
 
   .err:
-    mov rax, 0
+    add rsp, 15 * 8
+    xor eax, eax
     ret

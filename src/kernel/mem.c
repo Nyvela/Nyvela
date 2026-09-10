@@ -1,6 +1,6 @@
-#include "mem.h"
-#include "utils.h"
-#include "io.h"
+#include "../../include/kernel/mem.h"
+#include "../../include/kernel/utils.h"
+#include "../../include/kernel/io.h"
 
 extern uint8_t kernel_end;
 

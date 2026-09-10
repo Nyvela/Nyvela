@@ -324,7 +324,7 @@ protected_mode_entry:
 
 BITS 16
 
-%include "print.s"
+%include "io/print16.s"
 
 ; void encode_gdt_entry(dword edi:base, dword esi:limit, byte ch:access_byte, byte cl:flags, word bx:gdt_entry_addr)
 encode_gdt_entry:

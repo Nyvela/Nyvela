@@ -62,7 +62,7 @@ DAP: ; Disk Address Packet, required for BIOS's INT13h extensions
   
   dq 0x01 ; LBA
 
-%include "print.s" ; print, println, printnl
+%include "io/print16.s" ; print, println, printnl
 
 boot_msg: db "Loading Stage 1 to memory...", 0
 stage_1_err_msg: db "Failed to load Stage 1 to memory.", 0

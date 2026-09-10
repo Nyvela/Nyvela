@@ -1,5 +1,5 @@
-#include "idt.h"
-#include "io.h"
+#include "../../include/kernel/idt.h"
+#include "../../include/kernel/io.h"
 
 extern void isr_de();
 extern void isr_pf();

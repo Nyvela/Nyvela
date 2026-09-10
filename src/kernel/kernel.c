@@ -1,7 +1,9 @@
-#include "io.h"
-#include "utils.h"
-#include "mem.h"
-#include "idt.h"
+#include "../../include/kernel/io.h"
+#include "../../include/kernel/utils.h"
+#include "../../include/kernel/mem.h"
+#include "../../include/kernel/idt.h"
+
+extern void main();
 
 void klog_ram_data() {
   char buf[21];
@@ -218,7 +220,7 @@ void kmain() {
     __asm__ volatile ("cli\nhlt");
   }
   
-  kprintsucc("IDT ready.", 0x0F);
-
+  kprintsucc("IDT ready.", 0x0F);  
+  
   __asm__ volatile ("cli\nhlt");
 }

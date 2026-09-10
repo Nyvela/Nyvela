@@ -198,7 +198,7 @@ idt_set_gate:
 
   ret
 
-%include "print32.s"
+%include "io/print32.s"
 %include "idt.s"
 
 prot_succ_msg: db "Entered protected mode successfully.", 0
