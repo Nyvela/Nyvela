@@ -1,5 +1,5 @@
-#include "../../include/kernel/idt.h"
-#include "../../include/kernel/io.h"
+#include "../../../../include/nyvela/arch/x86_64/idt.h"
+#include "../../../../include/nyvela/drivers/video/console/console.h"
 
 extern void isr_de();
 extern void isr_pf();

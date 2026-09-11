@@ -8,36 +8,6 @@ stage_2:
   mov ah, 0x0F
   call printinfo
 
-  mov esi, idt_setup_msg
-  mov ah, 0x0F
-  call printinfo
-  
-  mov edi, isr_de ; #DE handler
-  xor bx, bx ; offset
-  call idt_set_gate
-
-  mov esi, isr_de_msg
-  mov ah, 0x0F
-  call printsucc
-
-  mov edi, isr_gp ; #GP handler
-  mov bx, 13 * 16 ; offset
-  call idt_set_gate
-
-  mov esi, isr_gp_msg
-  mov ah, 0x0F
-  call printsucc
-
-  mov esi, idt_setting_msg
-  mov ah, 0x0F
-  call printinfo
-
-  lidt [IDTR]
-
-  mov esi, idt_setup_succ_msg
-  mov ah, 0x0F
-  call printsucc
-
   mov esi, paging_disable_msg
   mov ah, 0x0F
   call printinfo
@@ -182,31 +152,10 @@ long_mode_enter:
 
 BITS 32
 
-; void idt_set_gate(dword address:edi, word offset:bx)
-idt_set_gate:
-  mov word [IDT + bx + 0], di
-  mov word [IDT + bx + 2], 0x28
-  mov byte [IDT + bx + 4], 0x0
-  mov byte [IDT + bx + 5], 0x8E
-
-  shr edi, 16
-  mov word [IDT + bx + 6], di
-  
-  shr edi, 16
-  mov dword [IDT + bx + 8], edi
-  mov dword [IDT + bx + 12], 0
-
-  ret
-
 %include "io/print32.s"
 %include "idt.s"
 
 prot_succ_msg: db "Entered protected mode successfully.", 0
-idt_setup_msg: db "Preparing IDT...", 0
-isr_de_msg: db "Encoded #DE entry.", 0
-isr_gp_msg: db "Encoded #GP entry.", 0
-idt_setting_msg: db "Setting IDT...", 0
-idt_setup_succ_msg: db "Set IDT.", 0
 paging_disable_msg: db "Disabling paging...", 0
 paging_disabled_msg: db "Disabled paging.", 0
 pae_enable_msg: db "Enabling PAE...", 0
@@ -225,14 +174,6 @@ entering_long_mode: db "Entering long mode...", 0
 entered_long_mode: db "Entered long mode.", 0
 
 KERNEL_SIZE_IN_SECTORS equ 25
-
-IDT: ; Interrupt Descriptor Table
-  times 14 dq 0, 0
-IDT_END:
-
-IDTR:
-  dw IDT_END - IDT - 1
-  dd IDT
 
 times ((0x1000 - (($ - $$ + 0x8800) % 0x1000)) % 0x1000) db 0
 pml4_table:

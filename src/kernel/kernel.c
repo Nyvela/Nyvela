@@ -1,13 +1,15 @@
-#include "../../include/kernel/io.h"
-#include "../../include/kernel/utils.h"
-#include "../../include/kernel/mem.h"
-#include "../../include/kernel/idt.h"
+#include "../../include/nyvela/drivers/video/console/console.h"
+#include "../../include/nyvela/lib/utils.h"
+#include "../../include/nyvela/mm/heap.h"
+#include "../../include/nyvela/mm/vmm.h"
+#include "../../include/nyvela/mm/pmm.h"
+#include "../../include/nyvela/arch/x86_64/idt.h"
 
 extern void main();
 
 void klog_ram_data() {
   char buf[21];
-  size_t count = *MMAP_COUNT;
+  uint64_t count = *MMAP_COUNT;
 
   if (!ki64toa(count, buf, sizeof(buf))) {
     kprintfail("Cannot convert memory map count.", 0x0F);
@@ -15,22 +17,22 @@ void klog_ram_data() {
   }
 
   char msg[64];
-  size_t i = 0;
+  uint64_t i = 0;
 
   for (; buf[i]; i++)
     msg[i] = buf[i];
 
   char tmp[] = " memory map entries.";
   
-  for (size_t j = 0; tmp[j]; j++, i++)
+  for (uint64_t j = 0; tmp[j]; j++, i++)
     msg[i] = tmp[j];
 
   msg[i] = '\0';
   kprintinfo(msg, 0x0F);
 
-  size_t total = 0;
+  uint64_t total = 0;
 
-  for (size_t i = 0; i < count; i++) {
+  for (uint64_t i = 0; i < count; i++) {
     if (MMAP_ENTRIES[i].type == E820_USABLE)
       total += MMAP_ENTRIES[i].length_in_bytes;
   }
@@ -47,7 +49,7 @@ void klog_ram_data() {
 
   char ram[] = " bytes of usable RAM.";
   
-  for (size_t j = 0; ram[j]; j++, i++)
+  for (uint64_t j = 0; ram[j]; j++, i++)
     msg[i] = ram[j];
 
   msg[i] = '\0';

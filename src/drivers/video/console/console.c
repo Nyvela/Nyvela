@@ -1,6 +1,5 @@
-#include "../../include/kernel/io.h"
-
-volatile uint8_t* VGA_MEM = (volatile uint8_t*)0xB8000;
+#include "../../../../include/nyvela/drivers/video/console/console.h"
+#include "../../../../include/nyvela/drivers/video/vga/vga.h"
 
 volatile uint8_t *ROW = (volatile uint8_t*)0xC801;
 volatile uint8_t *COLUMN = (volatile uint8_t*)0xC800;
@@ -18,14 +17,15 @@ void kprints(const char *s, const uint8_t color) {
   uint8_t col = *COLUMN;
 
   for (uint64_t i = 0; s[i]; i++) {
-    if (col >= 80) {
+    if (col >= VGA_WIDTH) {
       kprintnl();
+
       row = *ROW;
       col = *COLUMN;
     }
+    
+    vga_write(col, row, s[i] | (color << 8));
 
-    VGA_MEM[(row * 80 + col) * 2] = s[i];
-    VGA_MEM[(row * 80 + col) * 2 + 1] = color;
     ++col;
   }
 
@@ -41,17 +41,14 @@ void kprintnl() {
   *COLUMN = 0;
   *ROW += 1;
 
-  if (*ROW >= 25) {
-    for (uint16_t i = 0; i < 24 * 80 * 2; i++) {
-      VGA_MEM[i] = VGA_MEM[i + 80 * 2];
+  if (*ROW >= VGA_HEIGHT) {
+    for (uint16_t row = 0; row < (VGA_HEIGHT - 1) * VGA_WIDTH; row++) {
+      VGA_MEM[row] = VGA_MEM[row + VGA_WIDTH];
     }
 
-    for (uint16_t i = 0; i < 80; i++) {
-      VGA_MEM[(24 * 80 + i) * 2] = ' ';
-      VGA_MEM[(24 * 80 + i) * 2 + 1] = 0x07;
-    }
+    vga_fill_row(VGA_HEIGHT - 1, ' ' | (0x07 << 8));
 
-    *ROW = 24;
+    *ROW = VGA_HEIGHT - 1;
   }
 }
 
