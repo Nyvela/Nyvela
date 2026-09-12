@@ -5,6 +5,7 @@
 #include "../../include/nyvela/mm/pmm.h"
 #include "../../include/nyvela/arch/x86_64/idt.h"
 #include "../../include/nyvela/arch/x86_64/apic/apic.h"
+#include "../../include/nyvela/thread/thread.h"
 
 extern void main();
 

@@ -1,0 +1,11 @@
+#ifndef NYVGDT_H
+#define NYVGDT_H
+
+#define GDT_NULL_SEGMENT 0x00
+#define GDT_KCODE_SEGMENT 0x08
+#define GDT_KDATA_SEGMENT 0x10
+#define GDT_UCODE_SEGMENT 0x18
+#define GDT_UDATA_SEGMENT 0x20
+#define GDT_KCODE_LM_SEGMENT 0x28
+
+#endif // NYVGDT_H

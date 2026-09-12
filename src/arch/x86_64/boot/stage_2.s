@@ -173,7 +173,7 @@ updated_pml4: db "Updated PML4 table.", 0
 entering_long_mode: db "Entering long mode...", 0
 entered_long_mode: db "Entered long mode.", 0
 
-KERNEL_SIZE_IN_SECTORS equ 25
+KERNEL_SIZE_IN_SECTORS equ 33
 
 times ((0x1000 - (($ - $$ + 0x8800) % 0x1000)) % 0x1000) db 0
 pml4_table:

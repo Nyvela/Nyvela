@@ -4,6 +4,8 @@
 #include <stdint.h>
 #include <stdbool.h>
 
+#include "./context.h"
+
 typedef struct __attribute__((packed)) idt_entry_t {
   uint16_t offset_low;
   uint16_t selector;
@@ -26,8 +28,6 @@ extern idt_entry_t IDT[];
 
 bool kidt_init();
 
-void isr_de_handler(void);
-void isr_pf_handler(void);
-void isr_lapic_timer_handler(void);
+void isr_lapic_timer_handler(context_t* ctx);
 
 #endif

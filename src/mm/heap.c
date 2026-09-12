@@ -30,7 +30,7 @@ void* kmalloc(uint64_t size) {
   
   for (block_t *block = CURRENT_BLOCK; block; block = block->next) {
     if (!block->is_used) {
-      if (block->size < aligned_size) {
+      if (block->size < aligned_size + sizeof(block_t)) {
         void* page = kpalloc(); // 4 KiB
 
         if (!page) {

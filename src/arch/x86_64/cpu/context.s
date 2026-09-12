@@ -1,110 +1,175 @@
 section .data
-  CONTEXT_T_SIZE equ 152
+  CONTEXT_T_SIZE equ 168
   UINT64_T_SIZE equ 8
 
 section .bss
   ctx_ptr resq 1
-  RSP_REG resq 1
+  rsp_reg resq 1
 
 section .text
   global save_context
-  
+  global switch_context
+
   extern kmalloc
 
+; Stack currently looks like this
+; [  ss      ]
+; [  rflags  ]
+; [  old rsp ]
+; [  cs      ]
+; [  rip     ]
+; [  rsp     ]
 save_context:
-  mov [RSP_REG], rsp
+  mov [rsp_reg], rsp
 
-  push r15
-  push r14 
-  push r13
-  push r12
-  push r11
-  push r10
-  push r9
-  push r8
-  push rbp
-  push rbx
-  push rdx
-  push rcx
-  push rsi
-  push rdi
+  ; [rsp_reg + 8] - rip
+  ; [rsp_reg + 16] - cs
+  ; [rsp_reg + 24] - rflags
+  
   push rax
+  push rdi
+  push rsi
+  push rcx
+  push rdx
+  push rbx
+  push rbp
+  
+  ; rsp is already saved
+  
+  push r8
+  push r9
+  push r10
+  push r11
+  push r12
+  push r13
+  push r14
+  push r15
 
-  mov rax, CONTEXT_T_SIZE
+  ; rip, rflags and cs are already saved
+  
+  mov rdi, 168
   call kmalloc
 
-  cmp rax, 0
-  je .err
+  test rax, rax
+  jz .err
+
+  mov rdi, cr3
+  mov [rax + 160], rdi
+
+  mov rdx, [rsp_reg]
+
+  mov [rax + 152], 0x10 ; ss
+   
+  mov rdi, [rdx + 16] ; cs
+  mov [rax + 144], rdi
+
+  mov rdi, [rdx + 24] ; rflags
+  mov [rax + 136], rdi  
  
-  mov [ctx_ptr], rax
-  mov rdi, [ctx_ptr] ; dereference
-  
-  mov rdx, [RSP_REG]
-
-  pop rax
-  mov [rdi], rax
-  
-  mov rax, rdi
-  
-  pop rdi
-  mov [rax + UINT64_T_SIZE * 1], rdi
-
-  pop rsi
-  mov [rax + UINT64_T_SIZE * 2], rsi
-
-  pop rcx
-  mov [rax + UINT64_T_SIZE * 3], rcx
-
-  pop rdx
-  mov [rax + UINT64_T_SIZE * 4], rdx
-
-  pop rbx
-  mov [rax + UINT64_T_SIZE * 5], rbx
-  
-  pop rbp
-  mov [rax + UINT64_T_SIZE * 6], rbp
-  
-  mov rdi, [RSP_REG]
-  mov [rax + UINT64_T_SIZE * 7], rdi
-
-  pop r8
-  mov [rax + UINT64_T_SIZE * 8], r8
-
-  pop r9
-  mov [rax + UINT64_T_SIZE * 9], r9  
-
-  pop r10 
-  mov [rax + UINT64_T_SIZE * 10], r10  
-
-  pop r11
-  mov [rax + UINT64_T_SIZE * 11], r11  
-
-  pop r12
-  mov [rax + UINT64_T_SIZE * 12], r12  
-
-  pop r13
-  mov [rax + UINT64_T_SIZE * 13], r13
-
-  pop r14
-  mov [rax + UINT64_T_SIZE * 14], r14  
+  mov rdi, [rdx + 8] ; rip
+  mov [rax + 128], rdi
 
   pop r15
-  mov [rax + UINT64_T_SIZE * 15], r15
-  
-  mov rdx, [RSP_REG]
-  mov [rax + UINT64_T_SIZE * 16], rdx
+  mov [rax + 120], r15
 
-  pushfq
+  pop r14
+  mov [rax + 112], r14
+
+  pop r13
+  mov [rax + 104], r13
+
+  pop r12
+  mov [rax + 96], r12
+
+  pop r11
+  mov [rax + 88], r11
+
+  pop r10
+  mov [rax + 80], r10
+
+  pop r9
+  mov [rax + 72], r9
+
+  pop r8
+  mov [rax + 64], r8
+
+  mov rdi, [rsp_reg]
+  add rdi, 32
+  mov [rax + 56], rdi
+   
+  pop rbp 
+  mov [rax + 48], rbp
+
+  pop rbx
+  mov [rax + 40], rbx
+
   pop rdx
-
-  mov [rax + UINT64_T_SIZE * 17], rdx
-
-  mov rdx, cr3
-  mov [rax + UINT64_T_SIZE * 18], rdx
+  mov [rax + 32], rdx
   
-  ret
+  pop rcx
+  mov [rax + 24], rcx
 
+  pop rsi
+  mov [rax + 16], rsi
+
+  pop rdi
+  mov [rax + 8], rdi
+  
+  pop rdi ; move rax's value to rdi
+  mov [rax], rdi
+
+  mov rsp, [rsp_reg]
+  ret
+  
   .err:
-    add rsp, 15 * 8
-    xor eax, eax
+    pop r15
+    pop r14
+    pop r13
+    pop r12
+    pop r11
+    pop r10
+    pop r9
+    pop r8
+    pop rbp
+    pop rbx
+    pop rdx
+    pop rcx
+    pop rsi
+    pop rdi
+    pop rax
+
+    mov rsp, [rsp_reg]
+    xor rax, rax
     ret
+
+; rdi = context_t*
+switch_context: 
+  mov rax, [rdi + 160]
+  mov cr3, rax
+  
+  mov rsp, [rdi + 56]
+  
+  push qword [rdi + 152] ; ss
+  push qword [rdi + 56] ; rsp 
+  push qword [rdi + 136] ; rflags
+  push qword [rdi + 144] ; cs
+  push qword [rdi + 128] ; rip
+  
+  mov r15, [rdi + 120]
+  mov r14, [rdi + 112]
+  mov r13, [rdi + 104]
+
+  mov r12, [rdi + 96]
+  mov r11, [rdi + 88]
+  mov r10, [rdi + 80]
+  mov r9, [rdi + 72]
+  mov r8, [rdi + 64]
+  mov rbp, [rdi + 48]
+  mov rbx, [rdi + 40]
+  mov rdx, [rdi + 32]
+  mov rcx, [rdi + 24]
+  mov rsi, [rdi + 16] 
+  mov rax, [rdi]
+  mov rdi, [rdi + 8]
+
+  iretq
