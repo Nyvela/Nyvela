@@ -4,6 +4,7 @@
 #include "../../include/nyvela/mm/vmm.h"
 #include "../../include/nyvela/mm/pmm.h"
 #include "../../include/nyvela/arch/x86_64/idt.h"
+#include "../../include/nyvela/arch/x86_64/apic/apic.h"
 
 extern void main();
 
@@ -224,5 +225,20 @@ void kmain() {
   
   kprintsucc("IDT ready.", 0x0F);  
   
-  __asm__ volatile ("cli\nhlt");
+  if (!kenable_lapic()) {
+    kprintferr("Failed to enable LAPIC.", 0x0F);
+    __asm__ volatile ("cli\nhlt");
+  }
+
+  kprintsucc("LAPIC enabled.", 0x0F);
+  
+  ksetup_lapic_timer();
+  
+  kprintsucc("LAPIC timer setup complete.", 0x0F);
+  
+  __asm__ volatile ("sti");
+
+  for (;;) {
+    __asm__ volatile ("hlt");
+  }
 }

@@ -28,5 +28,6 @@ bool kidt_init();
 
 void isr_de_handler(void);
 void isr_pf_handler(void);
+void isr_lapic_timer_handler(void);
 
 #endif
