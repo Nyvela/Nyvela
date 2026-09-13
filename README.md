@@ -66,6 +66,7 @@ make clean  # Clean build/
 * [ ] Full exception handling (DE, PF, GP)
 * [ ] SMP support
 * [x] TSS and IST for fault isolation (ring 0 only for now)
+* [ ] Add hal
 
 ### Userspace
 
