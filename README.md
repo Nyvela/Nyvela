@@ -190,6 +190,11 @@ gdb build/kernel.elf
 * [ ] Implement input handling
 * [ ] Build a graphical interface
 
+### Technical debt
+
+* [ ] Rewrite everything to Rust
+* [ ] Implement HAL for future porting onto different architectures
+
 ## Contributing
 
 Contributions are welcome. Please open an issue or pull request, keep commits focused, add tests where applicable, and ensure `make` builds cleanly.
