@@ -5,11 +5,15 @@
 #include "../../../../include/nyvela/arch/x86_64/apic/apic.h"
 #include "../../../../include/nyvela/arch/x86_64/asm/cpu.h"
 #include "../../../../include/nyvela/arch/x86_64/asm/desc.h"
+#include "../../../../include/nyvela/arch/x86_64/asm/io.h"
+#include "../../../../include/nyvela/arch/x86_64/pic/pic.h"
+#include "../../../../include/nyvela/arch/x86_64/pit/pit.h"
 
 extern void isr_de();
 extern void isr_pf();
 extern void isr_gp();
 extern void isr_lapic_timer();
+extern void isr_pit();
 
 idt_entry_t IDT[256] = {0};
 
@@ -38,11 +42,17 @@ void isr_lapic_timer_handler(context_t* ctx) {
   scheduler_tick(ctx);
 }
 
+void isr_pit_handler() {
+  pit_ticks++;
+  kpic_eoi(0);
+}
+
 bool kidt_init() {
   idt_set_gate(0x00, isr_de);
   idt_set_gate(0x0E, isr_pf);
   idt_set_gate(0x0D, isr_gp);
-  idt_set_gate(0x20, isr_lapic_timer);
+  idt_set_gate(0x20, isr_pit);
+  idt_set_gate(LAPIC_TIMER_VECTOR, isr_lapic_timer);
 
   lidt((idtr_t){
     .limit = sizeof(IDT) - 1,

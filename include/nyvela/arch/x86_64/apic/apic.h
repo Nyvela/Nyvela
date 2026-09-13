@@ -14,12 +14,16 @@
 
 #define LAPIC_TIMER_DIVIDE 0x3E0
 #define LAPIC_TIMER_INIT 0x380
-#define LAPIC_TIMER_VECTOR 0x20
+#define LAPIC_TIMER_VECTOR 0x30
 #define LAPIC_DIVIDE_BY_16 0x03
 #define LAPIC_LVT_TIMER 0x320
 #define LAPIC_TIMER_PERIODIC (1 << 17)
+#define LAPIC_TIMER_CURRENT 0x390
+#define LAPIC_TIMER_MASKED 0x00010000
 
 #include <stdint.h>
+
+uintptr_t kget_apic_base();
 
 bool kenable_lapic();
 bool ksetup_lapic_timer();

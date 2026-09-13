@@ -29,5 +29,6 @@ extern idt_entry_t IDT[];
 bool kidt_init();
 
 void isr_lapic_timer_handler(context_t* ctx);
+void isr_pit_handler();
 
 #endif

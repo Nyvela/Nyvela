@@ -2,6 +2,7 @@
 #include "../../../../include/nyvela/arch/x86_64/asm/msr.h"
 #include "../../../../include/nyvela/mm/vmm.h"
 #include "../../../../include/nyvela/arch/x86_64/asm/out.h"
+#include "../../../../include/nyvela/arch/x86_64/pit/pit.h"
 
 static uintptr_t lapic_base;
 
@@ -30,24 +31,35 @@ bool kenable_lapic() {
   kvmmap(
     LAPIC_VIRT, lapic_phys, 0x03
   );
-
+  
   lapic_base = LAPIC_VIRT;
 
   uint32_t svr = klapic_read(LAPIC_SVR);
 
   klapic_write(LAPIC_SVR, svr | LAPIC_SVR_ENABLE);
-
-  outb(0x21, 0xFF);
-  outb(0xA1, 0xFF);
-
+  
   return (klapic_read(LAPIC_SVR) & LAPIC_SVR_ENABLE) != 0;
 }
 
 bool ksetup_lapic_timer() {
+  __asm__ volatile ("sti");
+
   klapic_write(LAPIC_TIMER_DIVIDE, LAPIC_DIVIDE_BY_16);
-  klapic_write(LAPIC_LVT_TIMER, LAPIC_TIMER_VECTOR | LAPIC_TIMER_PERIODIC);
+  klapic_write(LAPIC_LVT_TIMER, LAPIC_TIMER_VECTOR | LAPIC_TIMER_MASKED);
+
+  klapic_write(LAPIC_TIMER_INIT, 0xFFFFFFFF);
+
+  kpit_wait_ms(1000);
   
-  klapic_write(LAPIC_TIMER_INIT, 1000000);
+  uint32_t current = klapic_read(LAPIC_TIMER_CURRENT);
+  uint32_t elapsed = 0xFFFFFFFF - current;
+  
+  uint32_t counts_1ms = elapsed / 1000;
+
+  klapic_write(LAPIC_LVT_TIMER, LAPIC_TIMER_VECTOR | LAPIC_TIMER_PERIODIC);
+  klapic_write(LAPIC_TIMER_INIT, counts_1ms);
+  
+  __asm__ volatile ("cli");
 
   return true;
 }

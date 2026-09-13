@@ -13,6 +13,9 @@ section .text
 
   extern save_context
 
+  global isr_pit
+  extern isr_pit_handler
+
   extern kprintferr
 
 isr_de:
@@ -46,3 +49,7 @@ isr_lapic_timer:
   call save_context ; rax is now context_t*
   mov rdi, rax
   jmp isr_lapic_timer_handler
+
+isr_pit:
+  call isr_pit_handler
+  iretq

@@ -8,6 +8,19 @@
 #include "../../include/nyvela/arch/x86_64/asm/cpu.h"
 #include "../../include/nyvela/thread/thread.h"
 #include "../../include/nyvela/arch/x86_64/gdt.h"
+#include "../../include/nyvela/arch/x86_64/pic/pic.h"
+#include "../../include/nyvela/arch/x86_64/pit/pit.h"
+
+void krnl() {
+  asm volatile (
+    "mov $0x12345678, %%rax"
+    :
+    :
+    : "rax"
+  );
+
+  for (;;);
+}
 
 void umain(void) {
   asm volatile (
@@ -326,6 +339,14 @@ void kmain() {
   }
   
   kprintsucc("IDT ready.", 0x0F);  
+
+  kpic_init();
+
+  kprintsucc("Initiliazed PIC.", 0x0F);
+
+  kpit_set_freq(1000);
+
+  kprintsucc("Set PIT frequency to 1000 Hz.", 0x0F);
   
   if (!kenable_lapic()) {
     kprintferr("Failed to enable LAPIC.", 0x0F);
@@ -344,7 +365,9 @@ void kmain() {
   }
 
   kprintsucc("Initialized TSS.", 0x0F);
-  
+    
+  current_thread = spawn_thread(krnl, 0);
+
   uint64_t old_cr3;
 
   __asm__ volatile (
@@ -389,6 +412,8 @@ void kmain() {
 
   kvmmap(0x44F000, stack_phys, 0x07);
   
+  kvmmap(LAPIC_VIRT, kget_apic_base(), 0x03);
+
   kprintinfo("Switching to umain...", 0x0F);
 
   current_thread = spawn_thread((void (*)(void))0x400000, new_cr3);
@@ -402,6 +427,6 @@ void kmain() {
   __asm__ volatile ("sti");
 
   for (;;) {
-    cpu_hlt();
+    cpu_halt();
   }
 }

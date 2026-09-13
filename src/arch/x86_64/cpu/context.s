@@ -95,11 +95,27 @@ save_context:
 
   pop r8
   mov [rax + 64], r8
+  
+  mov rdi, [rdx + 16]
+  and rdi, 3
+  jz .ring0
+  
+  .ring3:
+    mov rdi, [rdx + 32]
+    mov [rax + 56], rdi
+    mov rdi, [rdx + 40]
+    mov [rax + 152], rdi
+    
+    jmp .continue
 
-  mov rdi, [rsp_reg]
-  add rdi, 32
-  mov [rax + 56], rdi
-   
+  .ring0:
+    mov rdi, [rsp_reg]
+    add rdi, 32
+    mov [rax + 56], rdi
+    mov qword [rax + 152], 0x10
+  
+  .continue:
+
   pop rbp 
   mov [rax + 48], rbp
 
@@ -151,13 +167,27 @@ switch_context:
   mov cr3, rax
   
   mov rsp, [rdi + 56]
+
+  mov rdx, [rdi + 144]
+  and rdx, 3
+  jz .ring0
   
-  push qword [rdi + 152] ; ss
-  push qword [rdi + 56] ; rsp 
-  push qword [rdi + 136] ; rflags
-  push qword [rdi + 144] ; cs
-  push qword [rdi + 128] ; rip
+  .ring3:
+    push qword [rdi + 152] ; ss
+    push qword [rdi + 56] ; rsp 
+    push qword [rdi + 136] ; rflags
+    push qword [rdi + 144] ; cs
+    push qword [rdi + 128] ; rip
+
+    jmp .continue
+
+  .ring0: 
+    push qword [rdi + 136] ; rflags
+    push qword [rdi + 144] ; cs
+    push qword [rdi + 128] ; rip
   
+  .continue:
+
   mov r15, [rdi + 120]
   mov r14, [rdi + 112]
   mov r13, [rdi + 104]

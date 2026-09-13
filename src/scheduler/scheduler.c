@@ -33,7 +33,7 @@ void scheduler_tick(context_t* ctx) {
 
   thread_t *next = scheduler_next();
 
-  if (next == current_thread) return;
+  if (next == current_thread) switch_context(ctx);
   
   current_thread = next;
   switch_context(next->context);
