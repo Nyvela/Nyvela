@@ -14,18 +14,20 @@ section .text
 
 ; Stack currently looks like this
 ; [  ss      ]
+; [  rsp     ]
 ; [  rflags  ]
-; [  old rsp ]
 ; [  cs      ]
 ; [  rip     ]
 ; [  rsp     ]
 save_context:
   mov [rsp_reg], rsp
-
+  
   ; [rsp_reg + 8] - rip
   ; [rsp_reg + 16] - cs
   ; [rsp_reg + 24] - rflags
-  
+  ; [rsp_reg + 32] - rsp
+  ; [rsp_reg + 40] - ss
+
   push rax
   push rdi
   push rsi
@@ -58,7 +60,8 @@ save_context:
 
   mov rdx, [rsp_reg]
 
-  mov [rax + 152], 0x10 ; ss
+  mov rdi, [rdx + 40] ; ss
+  mov [rax + 152], rdi
    
   mov rdi, [rdx + 16] ; cs
   mov [rax + 144], rdi
@@ -68,7 +71,7 @@ save_context:
  
   mov rdi, [rdx + 8] ; rip
   mov [rax + 128], rdi
-
+  
   pop r15
   mov [rax + 120], r15
 

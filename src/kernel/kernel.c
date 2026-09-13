@@ -6,8 +6,18 @@
 #include "../../include/nyvela/arch/x86_64/idt.h"
 #include "../../include/nyvela/arch/x86_64/apic/apic.h"
 #include "../../include/nyvela/thread/thread.h"
+#include "../../include/nyvela/arch/x86_64/gdt.h"
 
-extern void main();
+void umain(void) {
+  asm volatile (
+    "mov $0x12345678, %%rax"
+    :
+    :
+    : "rax"
+  );
+
+  for (;;);
+}
 
 void klog_ram_data() {
   char buf[21];
@@ -237,6 +247,67 @@ void kmain() {
   
   kprintsucc("LAPIC timer setup complete.", 0x0F);
   
+  if (!ktss_init()) {
+    kprintferr("Failed to initialize TSS.", 0x0F);
+    __asm__ volatile ("cli\nhlt");
+  }
+
+  kprintsucc("Initialized TSS.", 0x0F);
+  
+  uint64_t old_cr3;
+
+  __asm__ volatile (
+      "mov %%cr3, %0"
+      : "=r"(old_cr3)
+  );
+
+  uint64_t new_cr3 = (uint64_t)kpalloc();
+
+  if (!new_cr3) {
+    kprintferr("Failed to allocate cr3 for umain.", 0x0F);
+    __asm__ volatile ("cli\nhlt");
+  }
+
+  uint64_t *old_pml4 = (uint64_t *)(old_cr3 & ~0xFFFULL);
+  uint64_t *new_pml4 = (uint64_t *)new_cr3;
+
+  memset(new_pml4, 0, 0x1000);
+
+  for (uint64_t i = 0; i < 512; i++) {
+    new_pml4[i] = old_pml4[i];
+  }
+  
+  __asm__ volatile ("mov %0, %%cr3" :: "r"(new_cr3) : "memory");
+
+  uint64_t phys = (uint64_t)kpalloc();
+  
+  if (!phys) {
+    kprintferr("Failed to allocate memory for umain.", 0x0F);
+    __asm__ volatile ("cli\nhlt");
+  }
+
+  kvmmap(0x400000, phys, 0x07);
+  memcpy((void *)0x400000, umain, 0x1000);
+  
+  uint64_t stack_phys = (uint64_t)kpalloc();
+
+  if (!phys) {
+    kprintferr("Failed to allocate stack for umain.", 0x0F);
+    __asm__ volatile ("cli\nhlt");
+  }
+
+  kvmmap(0x44F000, stack_phys, 0x07);
+  
+  kprintinfo("Switching to umain...", 0x0F);
+
+  current_thread = spawn_thread((void (*)(void))0x400000, new_cr3);
+
+  current_thread->context->cs = 0x18 | 3;
+  current_thread->context->ss = 0x20 | 3;
+  current_thread->context->rsp = 0x450000;
+
+  switch_context(current_thread->context);
+
   __asm__ volatile ("sti");
 
   for (;;) {

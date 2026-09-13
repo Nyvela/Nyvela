@@ -49,4 +49,3 @@ bool kidt_init() {
 
   return true;
 }
-
