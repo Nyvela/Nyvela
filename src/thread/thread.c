@@ -12,7 +12,7 @@ uint64_t threads_length = 0;
 uint64_t threads_cap = 0;
 uint64_t next_thread_id = 1;
 
-thread_t* spawn_thread(void (*entry)(void)) {
+thread_t* spawn_thread(void (*entry)(void), uint64_t cr3) {
   if (!entry) return NULL;
   
   if (threads_cap == 0) {
@@ -48,7 +48,11 @@ thread_t* spawn_thread(void (*entry)(void)) {
 
   memset(context, 0, sizeof(context_t));
   
-  uint64_t cr3 = cpu_read_cr3();
+  if (!cr3) {
+    __asm__ volatile (
+      "mov %%cr3, %0" : "=r"(cr3)
+    );
+  }
 
   context->rip = (uint64_t)entry;
   context->rsp = (uint64_t)kernel_stack + 4096;

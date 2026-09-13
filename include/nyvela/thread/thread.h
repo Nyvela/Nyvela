@@ -29,6 +29,6 @@ extern uint64_t threads_length;
 
 extern uint64_t next_thread_id;
 
-thread_t* spawn_thread(void (*entry)(void));
+thread_t* spawn_thread(void (*entry)(void), uint64_t cr3);
 
 #endif // NYVTHREAD_H

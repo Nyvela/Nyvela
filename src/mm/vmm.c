@@ -107,6 +107,12 @@ bool kvmmap(uint64_t virt, uint64_t phys, uint64_t flags) {
   uint64_t pdpt_phys;
   uint64_t *pdpt;
 
+  uint64_t table_flags = 0x03;
+
+  if (flags & 0x04) {
+    table_flags |= 0x04;
+  }
+
   if (!(pml4e & 1)) {
     pdpt_phys = (uint64_t)kpalloc();
 
@@ -121,7 +127,7 @@ bool kvmmap(uint64_t virt, uint64_t phys, uint64_t flags) {
       pdpt[i] = 0;
     }
 
-    pml4[pml4_index] = pdpt_phys | 0x03;
+    pml4[pml4_index] = pdpt_phys | table_flags;
   } else {
     pdpt_phys = pml4e & ~0xFFFULL;
     pdpt = (uint64_t*)pdpt_phys;
@@ -146,7 +152,7 @@ bool kvmmap(uint64_t virt, uint64_t phys, uint64_t flags) {
       pd[i] = 0;
     }
 
-    pdpt[pdpt_index] = pd_phys | 0x03;
+    pdpt[pdpt_index] = pd_phys | table_flags;
   } else {
     pd_phys = pdpte & ~0xFFFULL;
     pd = (uint64_t*)pd_phys;
@@ -171,10 +177,16 @@ bool kvmmap(uint64_t virt, uint64_t phys, uint64_t flags) {
       pt[i] = 0;
     }
 
-    pd[pd_index] = pt_phys | 0x03;
+    pd[pd_index] = pt_phys | table_flags;
   } else {
     pt_phys = pde & ~0xFFFULL;
     pt = (uint64_t*)pt_phys;
+  }
+
+  if (flags & 0x04) {
+    pml4[pml4_index] |= 0x04;
+    pdpt[pdpt_index] |= 0x04;
+    pd[pd_index] |= 0x04;
   }
 
   pt[pt_index] = (phys & ~0xFFFULL) | flags;

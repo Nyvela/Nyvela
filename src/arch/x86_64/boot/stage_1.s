@@ -387,7 +387,7 @@ GDT_KDATA_FLAGS equ 0xC
 GDT_UCODE_BASE equ 0x0
 GDT_UCODE_LIMIT equ 0xFFFFF
 GDT_UCODE_ACCESS_BYTE equ 0xFA
-GDT_UCODE_FLAGS equ 0xC
+GDT_UCODE_FLAGS equ 0xA
 
 GDT_UDATA_BASE equ 0x0
 GDT_UDATA_LIMIT equ 0xFFFFF
@@ -406,6 +406,7 @@ GDT:
   dq 0 ; User Code
   dq 0 ; User Data
   dq 0 ; Kernel Code (x64)
+  dq 0, 0 ; TSS 
 GDT_END:
 
 GDTR:
