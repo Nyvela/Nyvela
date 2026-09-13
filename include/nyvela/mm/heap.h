@@ -12,6 +12,7 @@ typedef struct block_t {
 bool kmalloc_init();
 
 void* kmalloc(uint64_t size);
+void* krealloc(void* ptr, uint64_t new_size);
 void kfree(void* ptr);
 
 #endif // NYVHEAP_H

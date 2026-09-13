@@ -5,6 +5,7 @@
 #include "../../include/nyvela/mm/pmm.h"
 #include "../../include/nyvela/arch/x86_64/idt.h"
 #include "../../include/nyvela/arch/x86_64/apic/apic.h"
+#include "../../include/nyvela/arch/x86_64/asm/cpu.h"
 #include "../../include/nyvela/thread/thread.h"
 #include "../../include/nyvela/arch/x86_64/gdt.h"
 
@@ -110,6 +111,96 @@ void ktest_kmalloc() {
   kprintsucc("kmalloc test passed.", 0x0F);
 }
 
+void ktest_krealloc() {
+  // realloc(NULL, n) must behave like malloc.
+  void* a = krealloc(NULL, 64);
+
+  if (!a) {
+    kprintferr("krealloc NULL failed.", 0x0F);
+    return;
+  }
+
+  for (uint64_t i = 0; i < 64; i++) {
+    ((uint8_t*)a)[i] = (uint8_t)(i & 0xFF);
+  }
+
+  // Growing must preserve existing data.
+  void* b = krealloc(a, 128);
+
+  if (!b) {
+    kprintferr("krealloc grow failed.", 0x0F);
+    kfree(a);
+    return;
+  }
+
+  for (uint64_t i = 0; i < 64; i++) {
+    if (((uint8_t*)b)[i] != (uint8_t)(i & 0xFF)) {
+      kprintferr("krealloc grow corrupted data.", 0x0F);
+      kfree(b);
+      return;
+    }
+  }
+
+  for (uint64_t i = 64; i < 128; i++) {
+    ((uint8_t*)b)[i] = 0xA5;
+  }
+
+  // Shrinking must preserve the prefix.
+  void* c = krealloc(b, 32);
+
+  if (!c) {
+    kprintferr("krealloc shrink failed.", 0x0F);
+    kfree(b);
+    return;
+  }
+
+  for (uint64_t i = 0; i < 32; i++) {
+    if (((uint8_t*)c)[i] != (uint8_t)(i & 0xFF)) {
+      kprintferr("krealloc shrink corrupted data.", 0x0F);
+      kfree(c);
+      return;
+    }
+  }
+
+  // Size 0 must free and return NULL.
+  void* d = krealloc(c, 0);
+
+  if (d != NULL) {
+    kprintferr("krealloc zero should return NULL.", 0x0F);
+    kfree(d);
+    return;
+  }
+
+  // Oversize must fail without touching the old block.
+  void* e = kmalloc(64);
+
+  if (!e) {
+    kprintferr("krealloc setup failed.", 0x0F);
+    return;
+  }
+
+  *(uint64_t*)e = 0x1111222233334444;
+
+  void* f = krealloc(e, 8192);
+
+  if (f != NULL) {
+    kprintferr("krealloc oversize should fail.", 0x0F);
+    kfree(f);
+    kfree(e);
+    return;
+  }
+
+  if (*(uint64_t*)e != 0x1111222233334444) {
+    kprintferr("krealloc failed grow corrupted old block.", 0x0F);
+    kfree(e);
+    return;
+  }
+
+  kfree(e);
+
+  kprintsucc("krealloc test passed.", 0x0F);
+}
+
 void ktest_palloc() {
   void* mem = kpalloc();
 
@@ -163,8 +254,7 @@ void ktest_vmmap() {
     return;
   }
 
-  uint64_t cr3;
-  __asm__ volatile ("mov %%cr3, %0" : "=r"(cr3));
+  uint64_t cr3 = cpu_read_cr3();
 
   uint64_t *pml4 = (uint64_t*)(cr3 & ~0xFFFULL);
 
@@ -197,7 +287,7 @@ void kmain() {
   
   if (!kpmm_init()) {
     kprintferr("PMM initialization failed.", 0x0F);
-    __asm__ volatile ("cli\nhlt");
+    cpu_halt();
   }
   
   kprintsucc("PMM ready.", 0x0F);
@@ -208,7 +298,7 @@ void kmain() {
   
   if (!kvmm_init()) {
     kprintferr("VMM initialization failed.", 0x0F);
-    __asm__ volatile ("cli\nhlt");
+    cpu_halt();
   }
   
   kprintsucc("VMM ready.", 0x0F);
@@ -220,25 +310,26 @@ void kmain() {
   
   if (!kmalloc_init()) {
     kprintferr("kmalloc initialization failed.", 0x0F);
-    __asm__ volatile ("cli\nhlt");
+    cpu_halt();
   }
   
   kprintsucc("kmalloc ready.", 0x0F);
 
   ktest_kmalloc();
+  ktest_krealloc();
 
   kprintinfo("Initializing IDT...", 0x0F);
   
   if (!kidt_init()) {
     kprintferr("IDT initialization failed.", 0x0F);
-    __asm__ volatile ("cli\nhlt");
+    cpu_halt();
   }
   
   kprintsucc("IDT ready.", 0x0F);  
   
   if (!kenable_lapic()) {
     kprintferr("Failed to enable LAPIC.", 0x0F);
-    __asm__ volatile ("cli\nhlt");
+    cpu_halt();
   }
 
   kprintsucc("LAPIC enabled.", 0x0F);
@@ -311,6 +402,6 @@ void kmain() {
   __asm__ volatile ("sti");
 
   for (;;) {
-    __asm__ volatile ("hlt");
+    cpu_hlt();
   }
 }

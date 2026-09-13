@@ -162,16 +162,19 @@ gdb build/kernel.elf
 
 ### Kernel
 
-* [x] Physical memory management
-* [x] Virtual memory management
-* [x] Heap allocator
-* [x] LAPIC and timer interrupts
-* [x] Threads and context switching
+* [x] Initialize hardware (LAPIC + LAPIC timer)
+* [x] Implement physical memory management (`kpmm_init`, `kpalloc`/`kpfree`)
+* [x] Implement virtual memory (`kvmm_init`, `kvmmap`/`kvmunmap`)
+* [x] Implement interrupts and exceptions (IDT + DE/PF/GP ISRs + LAPIC timer tick)
+* [x] Implement a heap allocator (`kmalloc`/`krealloc`/`kfree`)
+* [x] Implement basic threads (`spawn_thread`; no processes yet)
+* [x] Implement a basic scheduler (round-robin on LAPIC timer)
+* [ ] Implement system calls
+* [x] Add x86-64 asm abstractions (`arch/x86_64/asm/`: cpu/io/desc/msr/cpuid)
 * [ ] Stable preemptive scheduler
 * [ ] Full exception handling (DE, PF, GP)
-* [ ] System calls
 * [ ] SMP support
-* [ ] TSS and IST for fault isolation (ring 0 only for now)
+* [x] TSS and IST for fault isolation (ring 0 only for now)
 
 ### Userspace
 
@@ -182,10 +185,10 @@ gdb build/kernel.elf
 
 ### Graphics
 
-* [ ] Framebuffer support
-* [ ] Text rendering
-* [ ] Input handling
-* [ ] Graphical interface
+* [ ] Implement framebuffer support
+* [x] Implement text rendering (VGA text-mode console; no framebuffer fonts yet)
+* [ ] Implement input handling
+* [ ] Build a graphical interface
 
 ## Contributing
 

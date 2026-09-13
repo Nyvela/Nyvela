@@ -1,5 +1,6 @@
 #include "../../include/nyvela/thread/thread.h"
 #include "../../include/nyvela/arch/x86_64/gdt.h"
+#include "../../include/nyvela/arch/x86_64/asm/cpu.h"
 #include "../../include/nyvela/mm/heap.h"
 #include "../../include/nyvela/mm/pmm.h"
 #include "../../include/nyvela/lib/utils.h"
