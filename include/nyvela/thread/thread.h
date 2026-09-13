@@ -20,6 +20,8 @@ typedef struct thread_t {
   void* kernel_stack;
 
   thread_state_t state;
+
+  int64_t exit_code;
 } thread_t;
 
 extern thread_t **threads;

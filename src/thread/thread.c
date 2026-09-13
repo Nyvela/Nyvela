@@ -65,6 +65,7 @@ thread_t* spawn_thread(void (*entry)(void), uint64_t cr3) {
   thread->context = context;
   thread->kernel_stack = kernel_stack;
   thread->state = THREAD_READY;
+  thread->exit_code = 0;
 
   if (threads_length >= threads_cap) {
     uint64_t new_cap = threads_cap * 2;

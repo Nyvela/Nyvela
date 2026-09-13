@@ -45,5 +45,6 @@ _Static_assert(offsetof(gdtr_t, limit) == 0, "gdtr limit offset");
 _Static_assert(offsetof(gdtr_t, base) == 2, "gdtr base offset"); 
 
 bool ktss_init();
+void tss_set_rsp0(uint64_t rsp0);
 
 #endif // NYVGDT_H

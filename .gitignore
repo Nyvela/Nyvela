@@ -54,3 +54,6 @@ dkms.conf
 # debug information files
 *.dwo
 build
+
+# Rust user-space crates: build output lives under build/, lockfiles are noise (no deps)
+src/user/shell/Cargo.lock

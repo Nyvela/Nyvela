@@ -27,6 +27,8 @@ _Static_assert(sizeof(idtr_t) == 10, "idtr_t must be 10 bytes");
 extern idt_entry_t IDT[];
 
 bool kidt_init();
+void idt_set_gate(int vector, void (*handler)(void));
+void idt_set_gate_user(int vector, void (*handler)(void));
 
 void isr_lapic_timer_handler(context_t* ctx);
 void isr_pit_handler();
