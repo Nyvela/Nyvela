@@ -11,9 +11,6 @@
 #include "../../include/nyvela/arch/x86_64/pic/pic.h"
 #include "../../include/nyvela/arch/x86_64/pit/pit.h"
 #include "../../include/nyvela/arch/x86_64/asm/io.h"
-void dbg_hex(uint64_t v){ for(int i=60;i>=0;i-=4){ uint8_t c=(v>>i)&0xF; c=c<10?'0'+c:'a'+c-10; outb(0xE9,c);} outb(0xE9,'\n');}
-void dbg_str(const char*s){ while(*s) outb(0xE9,*s++);}
-void dbg_print_switch(uint64_t ctx, uint64_t rsp){ dbg_str("sw ctx "); dbg_hex(ctx); dbg_str("sw rsp "); dbg_hex(rsp);}
 
 void krnl() {
   asm volatile (
@@ -371,7 +368,6 @@ void kmain() {
   kprintsucc("Initialized TSS.", 0x0F);
     
   current_thread = spawn_thread(krnl, 0);
-  { dbg_str("krnl kstack "); dbg_hex((uint64_t)current_thread->kernel_stack); dbg_str("krnl rsp "); dbg_hex(current_thread->context->rsp); dbg_str("krnl cr3 "); dbg_hex(read_cr3()); }
 
   uint64_t old_cr3 = read_cr3();
 
@@ -417,7 +413,6 @@ void kmain() {
   kprintinfo("Switching to umain...", 0x0F);
 
   current_thread = spawn_thread((void (*)(void))0x400000, new_cr3);
-  { dbg_str("umain kstack "); dbg_hex((uint64_t)current_thread->kernel_stack); dbg_str("umain rsp "); dbg_hex(current_thread->context->rsp); dbg_str("umain cr3 "); dbg_hex(new_cr3); }
 
   current_thread->context->cs = 0x18 | 3;
   current_thread->context->ss = 0x20 | 3;
