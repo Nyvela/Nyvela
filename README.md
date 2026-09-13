@@ -33,14 +33,15 @@ The project aims to provide full control over the system, including:
 
 ### Kernel
 
-* [ ] Initialize hardware
-* [ ] Implement physical memory management
-* [ ] Implement virtual memory
-* [ ] Implement interrupts and exceptions
-* [ ] Implement a heap allocator
-* [ ] Implement processes and threads
-* [ ] Implement a scheduler
+* [x] Initialize hardware (LAPIC + LAPIC timer)
+* [x] Implement physical memory management (`kpmm_init`, `kpalloc`/`kpfree`)
+* [x] Implement virtual memory (`kvmm_init`, `kvmmap`/`kvmunmap`)
+* [x] Implement interrupts and exceptions (IDT + DE/PF/GP ISRs + LAPIC timer tick)
+* [x] Implement a heap allocator (`kmalloc`/`krealloc`/`kfree`)
+* [x] Implement basic threads (`spawn_thread`; no processes yet)
+* [x] Implement a basic scheduler (round-robin on LAPIC timer)
 * [ ] Implement system calls
+* [x] Add x86-64 asm abstractions (`arch/x86_64/asm/`: cpu/io/desc/msr/cpuid)
 
 ### Userspace
 
@@ -53,9 +54,13 @@ The project aims to provide full control over the system, including:
 ### Graphics
 
 * [ ] Implement framebuffer support
-* [ ] Implement text rendering
+* [x] Implement text rendering (VGA text-mode console; no framebuffer fonts yet)
 * [ ] Implement input handling
 * [ ] Build a graphical interface
+
+### Technical debt
+
+* [ ] Rewrite everything to Rust
 
 ## License
 
