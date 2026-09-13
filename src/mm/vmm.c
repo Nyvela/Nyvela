@@ -1,10 +1,10 @@
 #include "../../include/nyvela/mm/vmm.h"
 #include "../../include/nyvela/mm/pmm.h"
 #include "../../include/nyvela/drivers/video/console/console.h"
+#include "../../include/nyvela/arch/x86_64/asm/cpu.h"
 
 bool kvmm_init() {
-  uint64_t cr3;
-  __asm__ volatile ("mov %%cr3, %0" : "=r"(cr3));
+  uint64_t cr3 = cpu_read_cr3();
 
   uint64_t pml4_phys = cr3 & ~0xFFFULL;
   uint64_t *pml4 = (uint64_t*)pml4_phys;
@@ -33,14 +33,13 @@ bool kvmm_init() {
     pd[i] = pt_phys | 0x03;
   }
 
-  __asm__ volatile ("mov %0, %%cr3" :: "r"(cr3) : "memory");
+  cpu_write_cr3(cr3);
 
   return true;
 }
 
 bool kvmunmap(uint64_t virt) { 
-  uint64_t cr3;
-  __asm__ volatile ("mov %%cr3, %0" : "=r"(cr3));
+  uint64_t cr3 = cpu_read_cr3();
   
   uint64_t pml4_index = (virt >> 39) & 0x1FFULL;
   uint64_t pdpt_index = (virt >> 30) & 0x1FFULL;
@@ -87,14 +86,13 @@ bool kvmunmap(uint64_t virt) {
   }
 
   pt[pt_index] = 0;
-  __asm__ volatile ("mov %0, %%cr3" :: "r"(cr3) : "memory");
+  cpu_write_cr3(cr3);
 
   return true;
 }
 
 bool kvmmap(uint64_t virt, uint64_t phys, uint64_t flags) { 
-  uint64_t cr3;
-  __asm__ volatile ("mov %%cr3, %0" : "=r"(cr3));
+  uint64_t cr3 = cpu_read_cr3();
   
   uint64_t pml4_index = (virt >> 39) & 0x1FFULL;
   uint64_t pdpt_index = (virt >> 30) & 0x1FFULL;
@@ -114,7 +112,7 @@ bool kvmmap(uint64_t virt, uint64_t phys, uint64_t flags) {
 
     if (!pdpt_phys) {
       kprintferr("Failed to allocate PDPT entry.", 0x0F);
-      __asm__ volatile ("cli\nhlt");
+      cpu_halt();
     }
      
     pdpt = (uint64_t*)pdpt_phys;
@@ -139,7 +137,7 @@ bool kvmmap(uint64_t virt, uint64_t phys, uint64_t flags) {
 
     if (!pd_phys) {
       kprintferr("Failed to allocate PD entry.", 0x0F);
-      __asm__ volatile ("cli\nhlt");
+      cpu_halt();
     }
      
     pd = (uint64_t*)pd_phys;
@@ -164,7 +162,7 @@ bool kvmmap(uint64_t virt, uint64_t phys, uint64_t flags) {
 
     if (!pt_phys) {
       kprintferr("Failed to allocate PD entry.", 0x0F);
-      __asm__ volatile ("cli\nhlt");
+      cpu_halt();
     }
      
     pt = (uint64_t*)pt_phys;
@@ -180,7 +178,7 @@ bool kvmmap(uint64_t virt, uint64_t phys, uint64_t flags) {
   }
 
   pt[pt_index] = (phys & ~0xFFFULL) | flags;
-  __asm__ volatile ("mov %0, %%cr3" :: "r"(cr3) : "memory");
+  cpu_write_cr3(cr3);
 
   return true;
 }

@@ -5,6 +5,7 @@
 #include "../../include/nyvela/mm/pmm.h"
 #include "../../include/nyvela/arch/x86_64/idt.h"
 #include "../../include/nyvela/arch/x86_64/apic/apic.h"
+#include "../../include/nyvela/arch/x86_64/asm/cpu.h"
 #include "../../include/nyvela/thread/thread.h"
 
 extern void main();
@@ -153,8 +154,7 @@ void ktest_vmmap() {
     return;
   }
 
-  uint64_t cr3;
-  __asm__ volatile ("mov %%cr3, %0" : "=r"(cr3));
+  uint64_t cr3 = cpu_read_cr3();
 
   uint64_t *pml4 = (uint64_t*)(cr3 & ~0xFFFULL);
 
@@ -187,7 +187,7 @@ void kmain() {
   
   if (!kpmm_init()) {
     kprintferr("PMM initialization failed.", 0x0F);
-    __asm__ volatile ("cli\nhlt");
+    cpu_halt();
   }
   
   kprintsucc("PMM ready.", 0x0F);
@@ -198,7 +198,7 @@ void kmain() {
   
   if (!kvmm_init()) {
     kprintferr("VMM initialization failed.", 0x0F);
-    __asm__ volatile ("cli\nhlt");
+    cpu_halt();
   }
   
   kprintsucc("VMM ready.", 0x0F);
@@ -210,7 +210,7 @@ void kmain() {
   
   if (!kmalloc_init()) {
     kprintferr("kmalloc initialization failed.", 0x0F);
-    __asm__ volatile ("cli\nhlt");
+    cpu_halt();
   }
   
   kprintsucc("kmalloc ready.", 0x0F);
@@ -221,14 +221,14 @@ void kmain() {
   
   if (!kidt_init()) {
     kprintferr("IDT initialization failed.", 0x0F);
-    __asm__ volatile ("cli\nhlt");
+    cpu_halt();
   }
   
   kprintsucc("IDT ready.", 0x0F);  
   
   if (!kenable_lapic()) {
     kprintferr("Failed to enable LAPIC.", 0x0F);
-    __asm__ volatile ("cli\nhlt");
+    cpu_halt();
   }
 
   kprintsucc("LAPIC enabled.", 0x0F);
@@ -237,9 +237,9 @@ void kmain() {
   
   kprintsucc("LAPIC timer setup complete.", 0x0F);
   
-  __asm__ volatile ("sti");
+  cpu_sti();
 
   for (;;) {
-    __asm__ volatile ("hlt");
+    cpu_hlt();
   }
 }

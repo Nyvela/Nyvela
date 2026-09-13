@@ -1,6 +1,7 @@
 #include "../../include/nyvela/mm/pmm.h"
 #include "../../include/nyvela/lib/utils.h"
 #include "../../include/nyvela/drivers/video/console/console.h"
+#include "../../include/nyvela/arch/x86_64/asm/cpu.h"
 
 extern uint8_t kernel_end;
 
@@ -72,21 +73,21 @@ void kpfree(void* page) {
   
   if (page_addr % 0x1000 != 0) {
     kprintferr("Invalid kpfree.", 0x0F);
-    __asm__ volatile ("cli\nhlt");
+    cpu_halt();
   }
 
   uint64_t frame = page_addr / 0x1000;
 
   if (frame >= FRAME_COUNT) {
     kprintferr("Invalid kpfree.", 0x0F);
-    __asm__ volatile("cli\nhlt");
+    cpu_halt();
   }
 
   uint8_t is_used = !(BITMAP[frame / 8] & (BITMAP_FREE << (frame % 8)));
 
   if (!is_used) {
     kprintferr("Invalid kpfree.", 0x0F);
-    __asm__ volatile("cli\nhlt");
+    cpu_halt();
   }
 
   BITMAP[frame / 8] |= (BITMAP_FREE << (frame % 8));

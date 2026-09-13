@@ -1,5 +1,6 @@
 #include "../../include/nyvela/thread/thread.h"
 #include "../../include/nyvela/arch/x86_64/gdt.h"
+#include "../../include/nyvela/arch/x86_64/asm/cpu.h"
 #include "../../include/nyvela/mm/heap.h"
 #include "../../include/nyvela/mm/pmm.h"
 #include "../../include/nyvela/lib/utils.h"
@@ -47,11 +48,7 @@ thread_t* spawn_thread(void (*entry)(void)) {
 
   memset(context, 0, sizeof(context_t));
   
-  uint64_t cr3;
-  
-  __asm__ volatile (
-    "mov %%cr3, %0" : "=r"(cr3)
-  );
+  uint64_t cr3 = cpu_read_cr3();
 
   context->rip = (uint64_t)entry;
   context->rsp = (uint64_t)kernel_stack + 4096;

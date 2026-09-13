@@ -1,8 +1,8 @@
 #ifndef NYVOUT_H
 #define NYVOUT_H
 
-#include <stdint.h>
-
-void outb(uint16_t port, uint8_t value);
+// Kept for backward compatibility: port I/O now lives in io.h as
+// header-inline functions.
+#include "io.h"
 
 #endif // NYVOUT_H
