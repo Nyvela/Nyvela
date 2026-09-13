@@ -70,7 +70,8 @@ $(IMAGE): $(BOOT) $(STAGE1) $(STAGE2) $(KERNEL)
 run: $(IMAGE)
 	qemu-system-x86_64 \
 		-drive format=raw,file=$(IMAGE) \
-		-d int,cpu_reset,guest_errors
+		-d int,cpu_reset,guest_errors \
+		-no-reboot -no-shutdown
 
 debug: $(IMAGE)
 	qemu-system-x86_64 \

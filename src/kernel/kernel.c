@@ -10,6 +10,10 @@
 #include "../../include/nyvela/arch/x86_64/gdt.h"
 #include "../../include/nyvela/arch/x86_64/pic/pic.h"
 #include "../../include/nyvela/arch/x86_64/pit/pit.h"
+#include "../../include/nyvela/arch/x86_64/asm/io.h"
+void dbg_hex(uint64_t v){ for(int i=60;i>=0;i-=4){ uint8_t c=(v>>i)&0xF; c=c<10?'0'+c:'a'+c-10; outb(0xE9,c);} outb(0xE9,'\n');}
+void dbg_str(const char*s){ while(*s) outb(0xE9,*s++);}
+void dbg_print_switch(uint64_t ctx, uint64_t rsp){ dbg_str("sw ctx "); dbg_hex(ctx); dbg_str("sw rsp "); dbg_hex(rsp);}
 
 void krnl() {
   asm volatile (
@@ -267,7 +271,7 @@ void ktest_vmmap() {
     return;
   }
 
-  uint64_t cr3 = cpu_read_cr3();
+  uint64_t cr3 = read_cr3();
 
   uint64_t *pml4 = (uint64_t*)(cr3 & ~0xFFFULL);
 
@@ -300,7 +304,7 @@ void kmain() {
   
   if (!kpmm_init()) {
     kprintferr("PMM initialization failed.", 0x0F);
-    cpu_halt();
+    hang();
   }
   
   kprintsucc("PMM ready.", 0x0F);
@@ -311,7 +315,7 @@ void kmain() {
   
   if (!kvmm_init()) {
     kprintferr("VMM initialization failed.", 0x0F);
-    cpu_halt();
+    hang();
   }
   
   kprintsucc("VMM ready.", 0x0F);
@@ -323,7 +327,7 @@ void kmain() {
   
   if (!kmalloc_init()) {
     kprintferr("kmalloc initialization failed.", 0x0F);
-    cpu_halt();
+    hang();
   }
   
   kprintsucc("kmalloc ready.", 0x0F);
@@ -335,7 +339,7 @@ void kmain() {
   
   if (!kidt_init()) {
     kprintferr("IDT initialization failed.", 0x0F);
-    cpu_halt();
+    hang();
   }
   
   kprintsucc("IDT ready.", 0x0F);  
@@ -350,7 +354,7 @@ void kmain() {
   
   if (!kenable_lapic()) {
     kprintferr("Failed to enable LAPIC.", 0x0F);
-    cpu_halt();
+    hang();
   }
 
   kprintsucc("LAPIC enabled.", 0x0F);
@@ -361,25 +365,21 @@ void kmain() {
   
   if (!ktss_init()) {
     kprintferr("Failed to initialize TSS.", 0x0F);
-    __asm__ volatile ("cli\nhlt");
+    hang();
   }
 
   kprintsucc("Initialized TSS.", 0x0F);
     
   current_thread = spawn_thread(krnl, 0);
+  { dbg_str("krnl kstack "); dbg_hex((uint64_t)current_thread->kernel_stack); dbg_str("krnl rsp "); dbg_hex(current_thread->context->rsp); dbg_str("krnl cr3 "); dbg_hex(read_cr3()); }
 
-  uint64_t old_cr3;
-
-  __asm__ volatile (
-      "mov %%cr3, %0"
-      : "=r"(old_cr3)
-  );
+  uint64_t old_cr3 = read_cr3();
 
   uint64_t new_cr3 = (uint64_t)kpalloc();
 
   if (!new_cr3) {
     kprintferr("Failed to allocate cr3 for umain.", 0x0F);
-    __asm__ volatile ("cli\nhlt");
+    hang();
   }
 
   uint64_t *old_pml4 = (uint64_t *)(old_cr3 & ~0xFFFULL);
@@ -391,13 +391,13 @@ void kmain() {
     new_pml4[i] = old_pml4[i];
   }
   
-  __asm__ volatile ("mov %0, %%cr3" :: "r"(new_cr3) : "memory");
+  write_cr3(new_cr3);
 
   uint64_t phys = (uint64_t)kpalloc();
   
   if (!phys) {
     kprintferr("Failed to allocate memory for umain.", 0x0F);
-    __asm__ volatile ("cli\nhlt");
+    hang();
   }
 
   kvmmap(0x400000, phys, 0x07);
@@ -405,9 +405,9 @@ void kmain() {
   
   uint64_t stack_phys = (uint64_t)kpalloc();
 
-  if (!phys) {
+  if (!stack_phys) {
     kprintferr("Failed to allocate stack for umain.", 0x0F);
-    __asm__ volatile ("cli\nhlt");
+    hang();
   }
 
   kvmmap(0x44F000, stack_phys, 0x07);
@@ -417,6 +417,7 @@ void kmain() {
   kprintinfo("Switching to umain...", 0x0F);
 
   current_thread = spawn_thread((void (*)(void))0x400000, new_cr3);
+  { dbg_str("umain kstack "); dbg_hex((uint64_t)current_thread->kernel_stack); dbg_str("umain rsp "); dbg_hex(current_thread->context->rsp); dbg_str("umain cr3 "); dbg_hex(new_cr3); }
 
   current_thread->context->cs = 0x18 | 3;
   current_thread->context->ss = 0x20 | 3;
@@ -424,9 +425,9 @@ void kmain() {
 
   switch_context(current_thread->context);
 
-  __asm__ volatile ("sti");
+  sti();
 
   for (;;) {
-    cpu_halt();
+    hlt();
   }
 }

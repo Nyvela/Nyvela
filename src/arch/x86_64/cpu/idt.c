@@ -17,12 +17,12 @@ extern void isr_pit();
 
 idt_entry_t IDT[256] = {0};
 
-void idt_set_gate(int vector, void (*handler)(void)) {
+void idt_set_gate(int vector, void (*handler)(void), uint8_t ist) {
   uint64_t addr = (uint64_t)handler;
 
   IDT[vector].offset_low = addr & 0xFFFF;
   IDT[vector].selector = 0x28;
-  IDT[vector].ist = 0;
+  IDT[vector].ist = ist;
   IDT[vector].type_attr = 0x8E;
   IDT[vector].offset_mid = (addr >> 16) & 0xFFFF;
   IDT[vector].offset_high = (addr >> 32) & 0xFFFFFFFF;
@@ -33,13 +33,9 @@ void lidt(idtr_t idtr) {
   desc_lidt(&idtr);
 }
 
-void iretq() {
-  cpu_iretq();
-}
-
-void isr_lapic_timer_handler(context_t* ctx) {
+void isr_lapic_timer_handler() {
   klapic_eoi();
-  scheduler_tick(ctx);
+  scheduler_tick();
 }
 
 void isr_pit_handler() {
@@ -48,11 +44,11 @@ void isr_pit_handler() {
 }
 
 bool kidt_init() {
-  idt_set_gate(0x00, isr_de);
-  idt_set_gate(0x0E, isr_pf);
-  idt_set_gate(0x0D, isr_gp);
-  idt_set_gate(0x20, isr_pit);
-  idt_set_gate(LAPIC_TIMER_VECTOR, isr_lapic_timer);
+  idt_set_gate(0x00, isr_de, 0);
+  idt_set_gate(0x0E, isr_pf, 0);
+  idt_set_gate(0x0D, isr_gp, 0);
+  idt_set_gate(0x20, isr_pit, 0);
+  idt_set_gate(LAPIC_TIMER_VECTOR, isr_lapic_timer, 0);
 
   lidt((idtr_t){
     .limit = sizeof(IDT) - 1,

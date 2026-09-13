@@ -4,7 +4,7 @@
 #include "../../include/nyvela/arch/x86_64/asm/cpu.h"
 
 bool kvmm_init() {
-  uint64_t cr3 = cpu_read_cr3();
+  uint64_t cr3 = read_cr3();
 
   uint64_t pml4_phys = cr3 & ~0xFFFULL;
   uint64_t *pml4 = (uint64_t*)pml4_phys;
@@ -33,13 +33,13 @@ bool kvmm_init() {
     pd[i] = pt_phys | 0x03;
   }
 
-  cpu_write_cr3(cr3);
+  write_cr3(cr3);
 
   return true;
 }
 
 bool kvmunmap(uint64_t virt) { 
-  uint64_t cr3 = cpu_read_cr3();
+  uint64_t cr3 = read_cr3();
   
   uint64_t pml4_index = (virt >> 39) & 0x1FFULL;
   uint64_t pdpt_index = (virt >> 30) & 0x1FFULL;
@@ -86,13 +86,13 @@ bool kvmunmap(uint64_t virt) {
   }
 
   pt[pt_index] = 0;
-  cpu_write_cr3(cr3);
+  write_cr3(cr3);
 
   return true;
 }
 
 bool kvmmap(uint64_t virt, uint64_t phys, uint64_t flags) { 
-  uint64_t cr3 = cpu_read_cr3();
+  uint64_t cr3 = read_cr3();
   
   uint64_t pml4_index = (virt >> 39) & 0x1FFULL;
   uint64_t pdpt_index = (virt >> 30) & 0x1FFULL;
@@ -118,7 +118,7 @@ bool kvmmap(uint64_t virt, uint64_t phys, uint64_t flags) {
 
     if (!pdpt_phys) {
       kprintferr("Failed to allocate PDPT entry.", 0x0F);
-      cpu_halt();
+      hang();
     }
      
     pdpt = (uint64_t*)pdpt_phys;
@@ -143,7 +143,7 @@ bool kvmmap(uint64_t virt, uint64_t phys, uint64_t flags) {
 
     if (!pd_phys) {
       kprintferr("Failed to allocate PD entry.", 0x0F);
-      cpu_halt();
+      hang();
     }
      
     pd = (uint64_t*)pd_phys;
@@ -168,7 +168,7 @@ bool kvmmap(uint64_t virt, uint64_t phys, uint64_t flags) {
 
     if (!pt_phys) {
       kprintferr("Failed to allocate PD entry.", 0x0F);
-      cpu_halt();
+      hang();
     }
      
     pt = (uint64_t*)pt_phys;
@@ -190,7 +190,7 @@ bool kvmmap(uint64_t virt, uint64_t phys, uint64_t flags) {
   }
 
   pt[pt_index] = (phys & ~0xFFFULL) | flags;
-  cpu_write_cr3(cr3);
+  write_cr3(cr3);
 
   return true;
 }

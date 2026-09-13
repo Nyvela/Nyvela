@@ -73,21 +73,21 @@ void kpfree(void* page) {
   
   if (page_addr % 0x1000 != 0) {
     kprintferr("Invalid kpfree.", 0x0F);
-    cpu_halt();
+    hang();
   }
 
   uint64_t frame = page_addr / 0x1000;
 
   if (frame >= FRAME_COUNT) {
     kprintferr("Invalid kpfree.", 0x0F);
-    cpu_halt();
+    hang();
   }
 
   uint8_t is_used = !(BITMAP[frame / 8] & (BITMAP_FREE << (frame % 8)));
 
   if (!is_used) {
     kprintferr("Invalid kpfree.", 0x0F);
-    cpu_halt();
+    hang();
   }
 
   BITMAP[frame / 8] |= (BITMAP_FREE << (frame % 8));

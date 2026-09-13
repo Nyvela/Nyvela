@@ -1,9 +1,11 @@
 #include "../../../../include/nyvela/arch/x86_64/gdt.h"
 #include "../../../../include/nyvela/lib/utils.h"
+#include "../../../../include/nyvela/mm/pmm.h"
 
 extern uint8_t kernel_stack_top[];
 
-static tss_t tss;
+tss_t tss;
+static kgdt_t gdt;
 
 void encode_tss(uint64_t base, uint32_t limit, uint8_t* entry) {
   entry[0] = limit & 0xFF;
@@ -40,10 +42,18 @@ bool ktss_init() {
   __asm__ volatile (
       "sgdt %0" : "=m"(gdtr)
   );
-  
-  encode_tss((uint64_t)&tss, sizeof(tss) - 1, (uint8_t*)(gdtr.base + 0x30));
 
-  __asm__ volatile ("ltr %0" : : "r"(0x30));
+  memcpy(gdt.gdt, (void*)gdtr.base, 6 * 8); 
+  encode_tss((uint64_t)&tss, sizeof(tss) - 1, (uint8_t*)&gdt.gdt[6]);
+  
+  gdt.gdtr.limit = 6 * 8 + 16 - 1;
+  gdt.gdtr.base = (uint64_t)gdt.gdt;
+
+  tss.ist1 = (uint64_t)kpalloc() + 4096;
+  tss.ist2 = (uint64_t)kpalloc() + 4096;
+ 
+  __asm__ volatile ("lgdt %0" :: "m"(gdt.gdtr));
+  __asm__ volatile ("ltr %0" :: "r"((uint16_t)0x30));
   
   return true;
 }
