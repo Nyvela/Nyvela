@@ -1,11 +1,6 @@
 #ifndef NYVDESC_H
 #define NYVDESC_H
 
-// Central descriptor-table abstractions (IDT/GDT/LDT/TR).
-// Takes `const void *` to a 10-byte limit:base pointer so callers can pass
-// `&idtr` / `&gdtr` structs without this header depending on higher-level
-// idt/gdt headers. All raw inline asm for these lives here.
-
 static inline void desc_lidt(const void *idtr) {
   __asm__ volatile ("lidt %0" :: "m"(*(const unsigned char (*)[10])idtr));
 }

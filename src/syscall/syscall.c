@@ -17,14 +17,12 @@ static bool user_range_ok(uint64_t addr, uint64_t len) {
   if (len > SYSCALL_MAX_BUF + SYSCALL_MAX_PATH) return false;
   if (addr < USER_AREA_BASE) return false;
   if (len == 0) return addr < USER_AREA_END;
-  if (addr + len < addr) return false; // overflow
+  if (addr + len < addr) return false;
   if (addr + len > USER_AREA_END) return false;
 
   return true;
 }
 
-// Copy NUL-terminated path from user window into kernel out[257].
-// Returns 0 on success, -1 on bad pointer / unterminated / too long.
 static int copy_user_path(uint64_t uaddr, char *out) {
   if (uaddr < USER_AREA_BASE || uaddr >= USER_AREA_END) return -1;
 
@@ -39,7 +37,7 @@ static int copy_user_path(uint64_t uaddr, char *out) {
 
   out[SYSCALL_MAX_PATH] = '\0';
 
-  return -1; // unterminated
+  return -1;
 }
 
 static int copy_from_user(uint64_t uaddr, void *kbuf, uint64_t len) {
@@ -73,7 +71,6 @@ static void sys_exit(syscall_frame_t *f) {
 
   thread_t *next = scheduler_next();
 
-  // scheduler_next returns current when nothing READY; detect dead-end.
   if (!next || next == current_thread || next->state != THREAD_READY) {
     kprintferr("sys_exit: no runnable thread.", 0x0F);
     __asm__ volatile ("cli; hlt");
@@ -83,7 +80,7 @@ static void sys_exit(syscall_frame_t *f) {
   current_thread = next;
 
   if (next->kernel_stack) {
-    tss_set_rsp0((uint64_t)next->kernel_stack + 4096);
+    tss.rsp0 = ((uint64_t)next->kernel_stack + 4096);
   }
 
   switch_context(next->context);
@@ -129,9 +126,6 @@ static void sys_write(syscall_frame_t *f) {
   f->rax = len;
 }
 
-// Blocking stdin read (fd 0). Returns as soon as >=1 byte is available,
-// up to len. Waits with sti/hlt so the timer keeps preempting us while
-// blocked (per-thread kernel stacks make this safe).
 static void sys_read(syscall_frame_t *f) {
   uint64_t fd = f->rdi;
   uint64_t ubuf = f->rsi;
@@ -172,8 +166,6 @@ static void sys_read(syscall_frame_t *f) {
 
     if (got) break;
 
-    // sti;hlt is race-free: STI shadows the next insn, so a pending
-    // key IRQ lands after hlt and wakes us.
     __asm__ volatile ("sti; hlt; cli" ::: "memory");
   }
 
@@ -187,9 +179,6 @@ static void sys_read(syscall_frame_t *f) {
   f->rax = got;
 }
 
-// Foreground exec: load ramfs file into the single PROG_BASE slot,
-// spawn it as a ring3 thread sharing our PML4, and block until it exits.
-// Returns the child's exit code (or negative VFS_ERR_*).
 static void sys_exec(syscall_frame_t *f) {
   char path[SYSCALL_MAX_PATH + 1];
 
@@ -205,7 +194,6 @@ static void sys_exec(syscall_frame_t *f) {
     return;
   }
 
-  // cr3=0 -> inherit current (shared user PML4; kernel mappings included).
   thread_t *child = spawn_thread((void (*)(void))PROG_BASE, 0);
 
   if (!child) {
@@ -217,7 +205,6 @@ static void sys_exec(syscall_frame_t *f) {
   child->context->ss = 0x20 | 3;
   child->context->rsp = PROG_STACK_TOP;
 
-  // v1: no reaping; DEAD exec threads linger (skipped by the scheduler).
   while (child->state != THREAD_DEAD) {
     __asm__ volatile ("sti; hlt; cli" ::: "memory");
   }
@@ -344,7 +331,6 @@ static void sys_fs_list(syscall_frame_t *f) {
   int64_t r = vfs_list(path, kbuf, len);
 
   if (r >= 0) {
-    // vfs_list NUL-terminates; copy bytes + NUL.
     uint64_t to_copy = (uint64_t)r + 1;
 
     if (to_copy > len) to_copy = len;
@@ -366,14 +352,14 @@ void syscall_handler(syscall_frame_t *f) {
   switch (f->rax) {
     case SYS_EXIT:
       sys_exit(f);
-      break; // unreachable (switches away)
+      break;
 
     case SYS_WRITE:
       sys_write(f);
       break;
 
     case SYS_YIELD:
-      f->rax = 0; // preemption is timer-driven; yield is a no-op stub
+      f->rax = 0;
       break;
 
     case SYS_READ:
@@ -400,6 +386,10 @@ void syscall_handler(syscall_frame_t *f) {
       sys_exec(f);
       break;
 
+    case SYS_CLEAR:
+      kclear();
+      break;
+
     default:
       f->rax = (uint64_t)(int64_t)VFS_ERR_INVAL;
       break;
@@ -407,6 +397,5 @@ void syscall_handler(syscall_frame_t *f) {
 }
 
 bool syscall_init(void) {
-  // IDT gate is installed by kidt_init(); nothing else needed.
   return true;
 }

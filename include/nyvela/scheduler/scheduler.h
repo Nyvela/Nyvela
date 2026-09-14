@@ -8,7 +8,7 @@
 #define SCHED_HZ 100
 #define TIMER_DIVISOR 16
 
-thread_t* scheduler_next();
-void scheduler_tick(context_t* ctx);
+thread_t* scheduler_next(void);
+void scheduler_tick(void);
 
 #endif // NYVSCHEDULER_H

@@ -34,7 +34,6 @@ void idt_set_gate(int vector, void (*handler)(void)) {
   IDT[vector].zero = 0;
 }
 
-// DPL3 interrupt gate so ring3 can invoke it (syscalls via int $0x80).
 void idt_set_gate_user(int vector, void (*handler)(void)) {
   uint64_t addr = (uint64_t)handler;
 
@@ -51,13 +50,9 @@ void lidt(idtr_t idtr) {
   desc_lidt(&idtr);
 }
 
-void iretq() {
-  cpu_iretq();
-}
-
-void isr_lapic_timer_handler(context_t* ctx) {
+void isr_lapic_timer_handler() {
   klapic_eoi();
-  scheduler_tick(ctx);
+  scheduler_tick();
 }
 
 void isr_pit_handler() {

@@ -32,7 +32,7 @@ void* kmalloc(uint64_t size) {
   for (block_t *block = CURRENT_BLOCK; block; block = block->next) {
     if (!block->is_used) {
       if (block->size < aligned_size) {
-        void* page = kpalloc(); // 4 KiB
+        void* page = kpalloc();
 
         if (!page) {
           return NULL;
@@ -50,7 +50,6 @@ void* kmalloc(uint64_t size) {
         return (void*)((uint8_t*)new_block + sizeof(block_t));
       }
 
-      // Fits but no room for a new header + minimal payload: use whole block.
       if (block->size < aligned_size + sizeof(block_t) + 16) {
         block->is_used = true;
         return (void*)((uint8_t*)block + sizeof(block_t));
@@ -94,7 +93,6 @@ void* krealloc(void* ptr, uint64_t new_size) {
 
   uint64_t aligned_new = (new_size + 15) & ~15ULL;
 
-  // Shrinking or same size: keep in place, data already fits.
   if (aligned_new <= old_size) {
     return ptr;
   }

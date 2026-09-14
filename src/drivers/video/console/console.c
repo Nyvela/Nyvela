@@ -52,8 +52,6 @@ void kprintnl() {
   }
 }
 
-// Length-aware write for syscall/user buffers (may not be NUL-terminated).
-// Handles '\n' as newline and '\b' as backspace, scrolls like kprints.
 void kwrite(const char *buf, uint64_t len, const uint8_t color) {
   if (!buf) return;
 
@@ -89,6 +87,17 @@ void kwrite(const char *buf, uint64_t len, const uint8_t color) {
     ++col;
     *COLUMN = col;
   }
+}
+
+void kclear() {
+  for (uint8_t row = 0; row < VGA_HEIGHT; row++) {
+    for (uint8_t col = 0; col < VGA_WIDTH; col++) {
+      vga_write(col, row, ' ' | (0x07 << 8));
+    }
+  }
+
+  *ROW = 0;
+  *COLUMN = 0;
 }
 
 void _print_prefixed_str(const char *s, const char *prefix, const uint16_t colors) {

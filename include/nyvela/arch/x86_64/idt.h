@@ -30,7 +30,7 @@ bool kidt_init();
 void idt_set_gate(int vector, void (*handler)(void));
 void idt_set_gate_user(int vector, void (*handler)(void));
 
-void isr_lapic_timer_handler(context_t* ctx);
+void isr_lapic_timer_handler();
 void isr_pit_handler();
 
 #endif

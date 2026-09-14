@@ -13,5 +13,6 @@ void kprintsucc(const char *s, const uint8_t color);
 void kprinterr(const char *s, const uint8_t color);
 void kprintferr(const char *s, const uint8_t color);
 void kprintinit(const char *s, const uint8_t color);
+void kclear();
 
 #endif // NYVCONSOLE_H

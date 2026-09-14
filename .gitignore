@@ -57,3 +57,4 @@ build
 
 # Rust user-space crates: build output lives under build/, lockfiles are noise (no deps)
 src/user/shell/Cargo.lock
+src/user/shell/target

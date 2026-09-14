@@ -49,9 +49,7 @@ thread_t* spawn_thread(void (*entry)(void), uint64_t cr3) {
   memset(context, 0, sizeof(context_t));
   
   if (!cr3) {
-    __asm__ volatile (
-      "mov %%cr3, %0" : "=r"(cr3)
-    );
+    cr3 = read_cr3();
   }
 
   context->rip = (uint64_t)entry;

@@ -2,9 +2,6 @@
 #include "../../include/nyvela/fs/ramfs.h"
 #include "../../include/nyvela/lib/utils.h"
 
-// VFS is currently a thin absolute-path validator over a single ramfs
-// mount at "/". Future filesystems plug in here (mount table + per-node ops).
-
 bool vfs_init(void) {
   return ramfs_init();
 }

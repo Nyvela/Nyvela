@@ -1,8 +1,3 @@
-//! Nyvela shell (Rust): minimal ring3 command interpreter.
-//!
-//! Commands: help, ls [path], cat <file>, echo <...>, run <name>, clear, exit.
-//! Port of the original C shell; behavior is identical.
-
 #![no_std]
 #![no_main]
 
@@ -12,7 +7,6 @@ use sys::*;
 
 #[panic_handler]
 fn panic(_info: &core::panic::PanicInfo) -> ! {
-    // Keep infallible: fixed bytes + exit, no formatting.
     sys_write(1, b"panic\n");
     sys_exit(1);
 }
@@ -57,9 +51,6 @@ fn puterr(cmd: &[u8], path: &[u8], e: i64) {
     write_str(b"\n");
 }
 
-/// Resolve a NUL-terminated input path into `out` (NUL-terminated):
-/// absolute stays, relative gains '/'; trailing slashes stripped
-/// (except root). Returns length excl. NUL, or `None` when too long.
 fn resolve_path(inp: &[u8], out: &mut [u8; 256]) -> Option<usize> {
     let mut n = 0usize;
     let mut i = 0usize;
@@ -123,7 +114,6 @@ fn cmd_ls(arg: Option<&[u8]>, list: &mut [u8; 1024], path: &mut [u8; 256]) {
     sys_write(1, &list[..r as usize]);
 }
 
-/// `path` is a NUL-terminated buffer; returns it as a slice excl. NUL.
 fn path_nul(path: &[u8]) -> &[u8] {
     &path[..slen(path)]
 }
@@ -181,12 +171,10 @@ fn cmd_run(arg: Option<Arg>, line: &[u8], prog: &mut [u8; 256]) {
     let a = &line[span.0..span.0 + span.1];
 
     if a.first().copied() == Some(b'/') {
-        // Absolute: only /bin/ (executing a data file faults on garbage).
         if a.len() < 5 || &a[..5] != b"/bin/" {
             write_str(b"run: only /bin/ programs (try bare name)\n");
             return;
         }
-        // Copy + NUL-terminate into prog.
         if a.len() + 1 > prog.len() {
             write_str(b"run: path too long\n");
             return;
@@ -230,14 +218,11 @@ fn cmd_run(arg: Option<Arg>, line: &[u8], prog: &mut [u8; 256]) {
 }
 
 fn cmd_clear() {
-    for _ in 0..25 {
-        write_str(b"\n");
-    }
+    sys_clear();
 }
 
-type Arg = (usize, usize); // (start, len) span into line buffer
+type Arg = (usize, usize);
 
-/// Reads a line with echo + backspace into `line`. Returns length.
 fn read_line(line: &mut [u8; 256]) -> usize {
     let mut len = 0usize;
     loop {
@@ -275,7 +260,6 @@ fn read_line(line: &mut [u8; 256]) -> usize {
     len
 }
 
-/// Split line[..len] on spaces/tabs into spans. Returns argc.
 fn split(line: &[u8], len: usize, argv: &mut [Arg; 8]) -> usize {
     let mut argc = 0usize;
     let mut i = 0usize;
@@ -306,7 +290,6 @@ fn eq_span(line: &[u8], a: &Arg, lit: &[u8]) -> bool {
     &line[a.0..a.0 + a.1] == lit
 }
 
-/// NUL-terminate argv span `a` in place (line buffer is ours).
 fn nul_term(line: &mut [u8], a: &Arg) {
     let e = a.0 + a.1;
     if e < line.len() {
@@ -327,7 +310,6 @@ fn run_line(
     if argc == 0 {
         return;
     }
-    // NUL-terminate each span so syscalls get C strings.
     for k in 0..argc {
         nul_term(line, &argv[k]);
     }

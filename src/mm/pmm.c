@@ -33,8 +33,8 @@ bool kpmm_init() {
       const uint64_t base = MMAP_ENTRIES[i].base_addr;
       const uint64_t end = base + MMAP_ENTRIES[i].length_in_bytes;
       
-      const uint64_t first_page = (base + 4095) / 4096; // align up
-      const uint64_t last_page = end / 4096; // align down
+      const uint64_t first_page = (base + 4095) / 4096;
+      const uint64_t last_page = end / 4096;
 
       for (uint64_t page = first_page; page < last_page; page++) {
         BITMAP[page / 8] |= BITMAP_FREE << (page % 8);
@@ -73,21 +73,21 @@ void kpfree(void* page) {
   
   if (page_addr % 0x1000 != 0) {
     kprintferr("Invalid kpfree.", 0x0F);
-    cpu_halt();
+    hang();
   }
 
   uint64_t frame = page_addr / 0x1000;
 
   if (frame >= FRAME_COUNT) {
     kprintferr("Invalid kpfree.", 0x0F);
-    cpu_halt();
+    hang();
   }
 
   uint8_t is_used = !(BITMAP[frame / 8] & (BITMAP_FREE << (frame % 8)));
 
   if (!is_used) {
     kprintferr("Invalid kpfree.", 0x0F);
-    cpu_halt();
+    hang();
   }
 
   BITMAP[frame / 8] |= (BITMAP_FREE << (frame % 8));

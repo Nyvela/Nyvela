@@ -40,9 +40,9 @@ void fault_dump(uint64_t vec, uint64_t err, uint64_t has_err, uint64_t *frame) {
   uint64_t rsp;
 
   if ((cs & 3) == 3) {
-    rsp = frame[3]; // ring3: CPU pushed SS/RSP
+    rsp = frame[3];
   } else {
-    rsp = (uint64_t)(frame + 3); // ring0: no stack switch
+    rsp = (uint64_t)(frame + 3);
   }
 
   kprintferr("FAULT dump:", 0x0F);
@@ -76,5 +76,5 @@ void fault_dump(uint64_t vec, uint64_t err, uint64_t has_err, uint64_t *frame) {
   kprints("code: ", 0x0F);
   put_bytes((const uint8_t *)rip);
 
-  cpu_halt();
+  hang();
 }

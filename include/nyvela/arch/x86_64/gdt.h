@@ -44,7 +44,20 @@ _Static_assert(sizeof(gdtr_t) == 10, "gdtr_t must be 10 bytes");
 _Static_assert(offsetof(gdtr_t, limit) == 0, "gdtr limit offset");
 _Static_assert(offsetof(gdtr_t, base) == 2, "gdtr base offset"); 
 
+typedef struct kgdt_t {
+  uint64_t gdt[8];
+  gdtr_t gdtr;
+} kgdt_t;
+
+_Static_assert(sizeof(tss_t) == 104, "tss_t must be 104 bytes");
+_Static_assert(sizeof(((kgdt_t*)0)->gdt) == 8 * 8, "kgdt gdt must be 8 entries (6 system segments + 16B TSS)");
+
+_Static_assert(offsetof(kgdt_t, gdtr) == 8 * 8, "gdt overlaps overlap gdtr");
+_Static_assert(GDT_TSS_SEGMENT + 16 <= sizeof(((kgdt_t*)0)->gdt), "GDT_TSS_SEGMENT TSS descriptor exceeds GDT bounds");
+_Static_assert(sizeof(((kgdt_t*)0)->gdt) + sizeof(gdtr_t) <= sizeof(kgdt_t), "kgdt_t size must fit gdt + gdtr without truncation");
+
+extern tss_t tss;
+
 bool ktss_init();
-void tss_set_rsp0(uint64_t rsp0);
 
 #endif // NYVGDT_H

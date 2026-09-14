@@ -3,9 +3,6 @@
 
 #include <stdint.h>
 
-// Central x86 port-I/O abstractions. Header-only so port accesses inline
-// without a function call. All raw inline asm for in/out lives here.
-
 static inline void outb(uint16_t port, uint8_t value) {
   __asm__ volatile ("outb %0, %1" :: "a"(value), "Nd"(port));
 }
@@ -36,7 +33,6 @@ static inline uint32_t inl(uint16_t port) {
   return value;
 }
 
-// Standard ~1-4us POST-port delay for legacy PIC/CMOS sequencing.
 static inline void io_wait(void) {
   outb(0x80, 0);
 }

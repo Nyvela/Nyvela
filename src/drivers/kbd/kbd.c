@@ -17,7 +17,6 @@ static bool kbd_shift_r = false;
 static bool kbd_caps = false;
 static bool kbd_e0 = false;
 
-// Scancode set 1, US. Index = press code. 0 = no character.
 static const char kbd_normal[128] = {
   [0x01] = 0x1B,
   [0x02] = '1', [0x03] = '2', [0x04] = '3', [0x05] = '4', [0x06] = '5',
@@ -61,7 +60,7 @@ static const char kbd_shifted[128] = {
 static void kbd_push(char c) {
   uint16_t next = (kbd_head + 1) % KBD_BUF_SIZE;
 
-  if (next == kbd_tail) return; // full: drop newest
+  if (next == kbd_tail) return;
 
   kbd_buf[kbd_head] = (uint8_t)c;
   kbd_head = next;
@@ -75,11 +74,10 @@ static void kbd_handle_code(uint8_t code) {
 
   if (kbd_e0) {
     kbd_e0 = false;
-    return; // ignore extended keys (arrows, etc.) in v1
+    return;
   }
 
   if (code & 0x80) {
-    // Release.
     uint8_t press = code & 0x7F;
 
     if (press == 0x2A) kbd_shift_l = false;
@@ -123,7 +121,6 @@ static void kbd_handle_code(uint8_t code) {
 }
 
 void kbd_irq_handler(void) {
-  // Drain all pending bytes (controller may queue several).
   for (int i = 0; i < 8; i++) {
     if (!(inb(KBD_STATUS) & KBD_OUT_FULL)) break;
 
@@ -141,7 +138,6 @@ void kbd_init(void) {
   kbd_caps = false;
   kbd_e0 = false;
 
-  // Drain stale controller output left by BIOS/SeaBIOS.
   for (int i = 0; i < 32; i++) {
     if (!(inb(KBD_STATUS) & KBD_OUT_FULL)) break;
 

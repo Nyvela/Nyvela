@@ -31,7 +31,6 @@ static ramfs_node_t *ramfs_alloc_node(const char *name, bool is_dir) {
   return n;
 }
 
-// Find direct child by name. Returns NULL if missing.
 static ramfs_node_t *ramfs_find_child(ramfs_node_t *dir, const char *name) {
   if (!dir || !dir->is_dir) return NULL;
 
@@ -42,35 +41,30 @@ static ramfs_node_t *ramfs_find_child(ramfs_node_t *dir, const char *name) {
   return NULL;
 }
 
-// Split absolute path into parent node + leaf name.
-// leaf_out must hold VFS_NAME_MAX+1 bytes.
-// Returns parent or NULL on error. Handles "/" specially (parent=NULL, leaf="").
 static ramfs_node_t *ramfs_parent_of(const char *path, char *leaf_out) {
   if (!path || path[0] != '/') return NULL;
 
-  // Root itself has no parent.
   if (kstrcmp(path, "/") == 0) {
     leaf_out[0] = '\0';
     return NULL;
   }
 
   ramfs_node_t *cur = ramfs_root;
-  size_t i = 1; // skip leading '/'
+  size_t i = 1;
 
   char comp[VFS_NAME_MAX + 1];
 
   for (;;) {
-    // Extract next component.
     size_t clen = 0;
 
     while (path[i] && path[i] != '/') {
-      if (clen >= VFS_NAME_MAX) return NULL; // component too long
+      if (clen >= VFS_NAME_MAX) return NULL;
       comp[clen++] = path[i++];
     }
 
     comp[clen] = '\0';
 
-    if (clen == 0) return NULL; // empty component ("//" or trailing "/")
+    if (clen == 0) return NULL;
 
     bool last = (path[i] == '\0');
 
@@ -80,13 +74,12 @@ static ramfs_node_t *ramfs_parent_of(const char *path, char *leaf_out) {
       return cur;
     }
 
-    // Intermediate: must descend into existing dir.
     ramfs_node_t *next = ramfs_find_child(cur, comp);
 
     if (!next || !next->is_dir) return NULL;
 
     cur = next;
-    i++; // skip '/'
+    i++;
   }
 }
 
@@ -128,7 +121,6 @@ int ramfs_create(const char *path, bool is_dir) {
 
   if (!n) return VFS_ERR_NOSPACE;
 
-  // Prepend to child list (O(1)).
   n->sibling = parent->child;
   parent->child = n;
 
@@ -209,7 +201,7 @@ int64_t ramfs_read(const char *path, void *buf, uint64_t len, uint64_t offset) {
     uint64_t chunk = 4096 - poff;
 
     if (chunk > len - done) chunk = len - done;
-    if (pidx >= f->page_count) break; // sparse (shouldn't happen)
+    if (pidx >= f->page_count) break;
 
     memcpy(dst + done, (void *)(f->pages[pidx] + poff), (size_t)chunk);
     done += chunk;
@@ -231,7 +223,6 @@ int64_t ramfs_list(const char *path, char *buf, uint64_t len) {
   for (ramfs_node_t *c = d->child; c; c = c->sibling) {
     size_t nl = kstrlen(c->name);
 
-    // Need name + '\n' + final NUL reserve.
     if (pos + nl + 1 + 1 > len) return VFS_ERR_NOSPACE;
 
     memcpy(buf + pos, c->name, nl);

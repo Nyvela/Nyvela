@@ -5,12 +5,14 @@ section .data
 section .bss
   ctx_ptr resq 1
   rsp_reg resq 1
+  ctx_pool resq 84 ; 4 * 168 / 8
+  ctx_idx resq 1
 
 section .text
   global save_context
   global switch_context
-
-  extern kmalloc
+  
+  extern current_thread
 
 ; Stack currently looks like this
 ; [  ss      ]
@@ -49,20 +51,11 @@ save_context:
 
   ; rip, rflags and cs are already saved
   
-  mov rdi, 168
-  call kmalloc
-
-  test rax, rax
-  jz .err
-
-  mov rdi, cr3
-  mov [rax + 160], rdi
+  mov rax, [rel current_thread]
+  mov rax, [rax + 8] ; context_t*
 
   mov rdx, [rsp_reg]
 
-  mov rdi, [rdx + 40] ; ss
-  mov [rax + 152], rdi
-   
   mov rdi, [rdx + 16] ; cs
   mov [rax + 144], rdi
 
@@ -165,8 +158,6 @@ save_context:
 switch_context: 
   mov rax, [rdi + 160]
   mov cr3, rax
-  
-  mov rsp, [rdi + 56]
 
   mov rdx, [rdi + 144]
   and rdx, 3
@@ -182,6 +173,7 @@ switch_context:
     jmp .continue
 
   .ring0: 
+    mov rsp, [rdi + 56] ; kernel rsp - valid only for ring0
     push qword [rdi + 136] ; rflags
     push qword [rdi + 144] ; cs
     push qword [rdi + 128] ; rip

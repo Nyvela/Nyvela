@@ -1,7 +1,3 @@
-// Example user program: shows how to write, build and run your own binary.
-// Build: see makefile USER rules. Run in Nyvela shell:  run hello
-// Copy this file as a template for your own programs.
-
 #include <nyvela/user/syslib.h>
 
 static char buf[512];

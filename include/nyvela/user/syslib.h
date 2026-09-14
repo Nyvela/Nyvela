@@ -1,13 +1,6 @@
 #ifndef NYV_SYSLIB_H
 #define NYV_SYSLIB_H
 
-// Nyvela user-space SDK (freestanding, no libc).
-// Provides raw syscall wrappers (int $0x80) and tiny string helpers.
-// User programs link as flat binaries for a fixed base address
-// (see src/user/ld/*.ld) and start at _start with a fresh stack.
-//
-// Syscall numbers must match include/nyvela/syscall/syscall.h.
-
 #include <stdint.h>
 #include <stddef.h>
 #include <stdbool.h>
@@ -29,7 +22,6 @@ static inline uint64_t sys_call(uint64_t nr, uint64_t a1, uint64_t a2,
   register uint64_t r10 __asm__("r10") = a4;
   uint64_t ret;
 
-  // The kernel stub preserves every register except rax (the return).
   __asm__ volatile ("int $0x80"
                     : "=a"(ret)
                     : "a"(nr), "D"(a1), "S"(a2), "d"(a3), "r"(r10)
@@ -81,8 +73,6 @@ static inline int64_t sys_exec(const char *path) {
   return (int64_t)sys_call(SYS_EXEC, (uint64_t)path, 0, 0, 0);
 }
 
-// --- tiny string helpers (in-header so every program gets them) ---
-
 static inline size_t ustrlen(const char *s) {
   size_t n = 0;
 
@@ -129,7 +119,6 @@ static inline void *umemset(void *dst, uint8_t v, size_t n) {
   return d;
 }
 
-// Signed 64-bit to decimal. Returns chars written (excl. NUL).
 static inline size_t uitoa(int64_t val, char *buf, size_t cap) {
   if (cap == 0) return 0;
 

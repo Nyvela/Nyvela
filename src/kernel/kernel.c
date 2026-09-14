@@ -20,11 +20,9 @@ extern uint8_t shell_blob_end[];
 extern uint8_t hello_blob_start[];
 extern uint8_t hello_blob_end[];
 
-// Kernel idle thread: hlt with IF=1 so the LAPIC timer preempts us.
-// (Never cli+hlt here: that would stop the timer and deadlock.)
 void krnl() {
   for (;;) {
-    __asm__ volatile ("hlt");
+    hlt();
   }
 }
 
@@ -120,7 +118,6 @@ void ktest_kmalloc() {
 }
 
 void ktest_krealloc() {
-  // realloc(NULL, n) must behave like malloc.
   void* a = krealloc(NULL, 64);
 
   if (!a) {
@@ -132,7 +129,6 @@ void ktest_krealloc() {
     ((uint8_t*)a)[i] = (uint8_t)(i & 0xFF);
   }
 
-  // Growing must preserve existing data.
   void* b = krealloc(a, 128);
 
   if (!b) {
@@ -153,7 +149,6 @@ void ktest_krealloc() {
     ((uint8_t*)b)[i] = 0xA5;
   }
 
-  // Shrinking must preserve the prefix.
   void* c = krealloc(b, 32);
 
   if (!c) {
@@ -170,7 +165,6 @@ void ktest_krealloc() {
     }
   }
 
-  // Size 0 must free and return NULL.
   void* d = krealloc(c, 0);
 
   if (d != NULL) {
@@ -179,7 +173,6 @@ void ktest_krealloc() {
     return;
   }
 
-  // Oversize must fail without touching the old block.
   void* e = kmalloc(64);
 
   if (!e) {
@@ -262,7 +255,7 @@ void ktest_vmmap() {
     return;
   }
 
-  uint64_t cr3 = cpu_read_cr3();
+  uint64_t cr3 = read_cr3();
 
   uint64_t *pml4 = (uint64_t*)(cr3 & ~0xFFFULL);
 
@@ -317,7 +310,6 @@ void ktest_vfs() {
     return;
   }
 
-  // /test must show up in root listing.
   bool found = false;
   size_t pos = 0;
 
@@ -342,7 +334,6 @@ void ktest_vfs() {
 void ktest_syscall() {
   uint64_t ret = 0;
 
-  // SYS_YIELD takes no buffers; proves int $0x80 gate works from CPL0.
   __asm__ volatile (
     "mov $2, %%rax\n"
     "int $0x80\n"
@@ -355,7 +346,6 @@ void ktest_syscall() {
     return;
   }
 
-  // Bad fd must fail with VFS_ERR_INVAL (returned as negative u64).
   __asm__ volatile (
     "mov $1, %%rax\n"
     "mov $99, %%rdi\n"
@@ -371,7 +361,6 @@ void ktest_syscall() {
     return;
   }
 
-  // SYS_READ with bad fd must fail the same way without touching kbd.
   __asm__ volatile (
     "mov $3, %%rax\n"
     "mov $99, %%rdi\n"
@@ -390,47 +379,44 @@ void ktest_syscall() {
   kprintsucc("syscall test passed.", 0x0F);
 }
 
-// Publish embedded user binaries + demo text into ramfs.
-// The shell itself lives here too (/bin/sh): boot spawns it through
-// the same exec_load() path as SYS_EXEC, so init is just "run /bin/sh".
 static void kload_user_bins(void) {
   if (vfs_create("/bin", true) != VFS_OK) {
     kprintferr("Failed to create /bin.", 0x0F);
-    cpu_halt();
+    hang();
   }
 
   uint64_t shell_size = (uint64_t)(shell_blob_end - shell_blob_start);
 
   if (shell_size == 0 || shell_size > VFS_MAX_FILE_SIZE) {
     kprintferr("Bad shell blob size.", 0x0F);
-    cpu_halt();
+    hang();
   }
 
   if (vfs_create("/bin/sh", false) != VFS_OK) {
     kprintferr("Failed to create /bin/sh.", 0x0F);
-    cpu_halt();
+    hang();
   }
 
   if (vfs_write("/bin/sh", shell_blob_start, shell_size, 0) != (int64_t)shell_size) {
     kprintferr("Failed to write /bin/sh.", 0x0F);
-    cpu_halt();
+    hang();
   }
 
   uint64_t hello_size = (uint64_t)(hello_blob_end - hello_blob_start);
 
   if (hello_size == 0 || hello_size > VFS_MAX_FILE_SIZE) {
     kprintferr("Bad hello blob size.", 0x0F);
-    cpu_halt();
+    hang();
   }
 
   if (vfs_create("/bin/hello", false) != VFS_OK) {
     kprintferr("Failed to create /bin/hello.", 0x0F);
-    cpu_halt();
+    hang();
   }
 
   if (vfs_write("/bin/hello", hello_blob_start, hello_size, 0) != (int64_t)hello_size) {
     kprintferr("Failed to write /bin/hello.", 0x0F);
-    cpu_halt();
+    hang();
   }
 
   static const char readme[] =
@@ -439,14 +425,14 @@ static void kload_user_bins(void) {
 
   if (vfs_create("/readme.txt", false) != VFS_OK) {
     kprintferr("Failed to create /readme.txt.", 0x0F);
-    cpu_halt();
+    hang();
   }
 
   uint64_t rlen = sizeof(readme) - 1;
 
   if (vfs_write("/readme.txt", readme, rlen, 0) != (int64_t)rlen) {
     kprintferr("Failed to write /readme.txt.", 0x0F);
-    cpu_halt();
+    hang();
   }
 }
 
@@ -460,7 +446,7 @@ void kmain() {
   
   if (!kpmm_init()) {
     kprintferr("PMM initialization failed.", 0x0F);
-    cpu_halt();
+    hang();
   }
   
   kprintsucc("PMM ready.", 0x0F);
@@ -471,7 +457,7 @@ void kmain() {
   
   if (!kvmm_init()) {
     kprintferr("VMM initialization failed.", 0x0F);
-    cpu_halt();
+    hang();
   }
   
   kprintsucc("VMM ready.", 0x0F);
@@ -483,7 +469,7 @@ void kmain() {
   
   if (!kmalloc_init()) {
     kprintferr("kmalloc initialization failed.", 0x0F);
-    cpu_halt();
+    hang();
   }
   
   kprintsucc("kmalloc ready.", 0x0F);
@@ -495,7 +481,7 @@ void kmain() {
   
   if (!kidt_init()) {
     kprintferr("IDT initialization failed.", 0x0F);
-    cpu_halt();
+    hang();
   }
   
   kprintsucc("IDT ready.", 0x0F);  
@@ -510,7 +496,7 @@ void kmain() {
   
   if (!kenable_lapic()) {
     kprintferr("Failed to enable LAPIC.", 0x0F);
-    cpu_halt();
+    hang();
   }
 
   kprintsucc("LAPIC enabled.", 0x0F);
@@ -519,13 +505,11 @@ void kmain() {
   
   kprintsucc("LAPIC timer setup complete.", 0x0F);
 
-  // PIT was only needed to calibrate the LAPIC timer. Mask it so the
-  // kernel runs on the LAPIC tick (0x30) only.
   kpic_disable();
   
   if (!ktss_init()) {
     kprintferr("Failed to initialize TSS.", 0x0F);
-    __asm__ volatile ("cli\nhlt");
+    hang();
   }
 
   kprintsucc("Initialized TSS.", 0x0F);
@@ -533,17 +517,17 @@ void kmain() {
   kbd_init();
 
   kprintsucc("Keyboard ready (IRQ1).", 0x0F);
-
+    
   kprintinfo("Initializing VFS (ramfs at /)...", 0x0F);
 
   if (!vfs_init()) {
     kprintferr("VFS initialization failed.", 0x0F);
-    cpu_halt();
+    hang();
   }
 
   if (!syscall_init()) {
     kprintferr("Syscall initialization failed.", 0x0F);
-    cpu_halt();
+    hang();
   }
 
   kprintsucc("VFS ready.", 0x0F);
@@ -555,57 +539,49 @@ void kmain() {
   ktest_vfs();
   ktest_syscall();
 
-  // Kernel idle thread (ring0 hlt loop, always READY so exit has somewhere to go).
   thread_t *idle = spawn_thread(krnl, 0);
 
   if (!idle) {
     kprintferr("Failed to spawn idle thread.", 0x0F);
-    cpu_halt();
+    hang();
   }
 
-  // Build a user address space: clone kernel PML4, then map user code+stack
-  // with U/S. Switch to it first so kvmmap() below targets the user PML4.
   uint64_t new_cr3 = vmm_create_user_pml4();
 
   if (!new_cr3) {
     kprintferr("Failed to allocate cr3 for user.", 0x0F);
-    __asm__ volatile ("cli\nhlt");
+    hang();
   }
 
-  cpu_write_cr3(new_cr3);
+  write_cr3(new_cr3);
 
-  // Keep a single address space from here on: idle and user share the
-  // cloned PML4 (kernel mappings identical, user pages U/S).
   idle->context->cr3 = new_cr3;
 
-  // Map the shell reservation (SHELL_PAGES at USER_CODE_VIRT) with U/S
-  // pages, then load /bin/sh into it via the generic loader: init is
-  // exactly "run /bin/sh". Reservation covers blob .text/.rodata plus
-  // .bss past the file image; exec_load zeroes the whole window first.
   for (uint64_t i = 0; i < SHELL_PAGES; i++) {
     uint64_t phys = (uint64_t)kpalloc();
 
     if (!phys) {
       kprintferr("Failed to allocate memory for shell.", 0x0F);
-      __asm__ volatile ("cli\nhlt");
+      hang();
     }
 
     if (!kvmmap(USER_CODE_VIRT + i * 4096, phys, 0x07)) {
       kprintferr("Failed to map shell.", 0x0F);
-      __asm__ volatile ("cli\nhlt");
+      hang();
     }
   }
 
   if (exec_load("/bin/sh", USER_CODE_VIRT, SHELL_MAX) < 0) {
     kprintferr("Failed to load /bin/sh.", 0x0F);
-    __asm__ volatile ("cli\nhlt");
+    hang();
   }
+
 
   uint64_t stack_phys = (uint64_t)kpalloc();
 
   if (!stack_phys) {
     kprintferr("Failed to allocate stack for shell.", 0x0F);
-    __asm__ volatile ("cli\nhlt");
+    hang();
   }
 
   if (!kvmmap(USER_STACK_PAGE, stack_phys, 0x07)) {
@@ -615,34 +591,32 @@ void kmain() {
 
   memset((void *)USER_STACK_PAGE, 0, 4096);
 
-  // Foreground program slot for SYS_EXEC: zeroed pages + own stack,
-  // mapped once at boot so exec is just memcpy + spawn.
   for (uint64_t i = 0; i < PROG_PAGES; i++) {
     uint64_t phys = (uint64_t)kpalloc();
-
+  
     if (!phys) {
       kprintferr("Failed to allocate program slot.", 0x0F);
-      __asm__ volatile ("cli\nhlt");
+      hang();
     }
 
     if (!kvmmap(PROG_BASE + i * 4096, phys, 0x07)) {
       kprintferr("Failed to map program slot.", 0x0F);
-      __asm__ volatile ("cli\nhlt");
+      hang();
     }
 
     memset((void *)(PROG_BASE + i * 4096), 0, 4096);
   }
-
+  
   uint64_t prog_stack = (uint64_t)kpalloc();
 
   if (!prog_stack) {
     kprintferr("Failed to allocate program stack.", 0x0F);
-    __asm__ volatile ("cli\nhlt");
+    hang();
   }
 
   if (!kvmmap(PROG_STACK_PAGE, prog_stack, 0x07)) {
     kprintferr("Failed to map program stack.", 0x0F);
-    __asm__ volatile ("cli\nhlt");
+    hang();
   }
 
   memset((void *)PROG_STACK_PAGE, 0, 4096);
@@ -661,11 +635,10 @@ void kmain() {
   user->context->rsp = USER_STACK_TOP;
 
   current_thread = user;
-  tss_set_rsp0((uint64_t)user->kernel_stack + 4096);
+  tss.rsp0 = ((uint64_t)user->kernel_stack + 4096);
   switch_context(user->context);
 
-  // switch_context() iretqs away and never returns.
   for (;;) {
-    cpu_halt();
+    hlt();
   }
 }

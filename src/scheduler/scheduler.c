@@ -30,34 +30,13 @@ thread_t* scheduler_next() {
   return current_thread;
 }
 
-void scheduler_tick(context_t* ctx) {
-  if (!current_thread || !ctx) return;
-
-  // save_context() allocates a fresh context_t per timer tick.
-  // Free the previous buffer so preemption doesn't leak a context per tick;
-  // freed 168-byte blocks are reused by the next tick (heap has no coalescing).
-  context_t *old = current_thread->context;
-  current_thread->context = ctx;
-
-  if (old && old != ctx) kfree(old);
-
+void scheduler_tick(void) {
   thread_t *next = scheduler_next();
 
-  if (!next) {
-    switch_context(ctx);
-    return;
-  }
+  if (next != current_thread) current_thread = next;
+  
+  tss.rsp0 = (uint64_t)current_thread->kernel_stack + 4096;
 
-  if (next == current_thread) {
-    switch_context(ctx);
-    return;
-  }
-
-  current_thread = next;
-
-  if (next->kernel_stack) {
-    tss_set_rsp0((uint64_t)next->kernel_stack + 4096);
-  }
-
-  switch_context(next->context);
+  switch_context(current_thread->context);
+  __builtin_unreachable();  
 }
