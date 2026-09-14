@@ -3,7 +3,6 @@
 #include "../../include/nyvela/thread/thread.h"
 #include "../../include/nyvela/mm/heap.h"
 #include "../../include/nyvela/arch/x86_64/gdt.h"
-#include "../../include/nyvela/arch/x86_64/asm/io.h"
 
 thread_t* scheduler_next() {
   if (threads_length == 0)

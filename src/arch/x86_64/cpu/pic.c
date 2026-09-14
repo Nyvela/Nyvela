@@ -25,3 +25,24 @@ void kpic_eoi(uint8_t irq) {
 
   outb(0x20, 0x20);
 }
+
+void kpic_disable() {
+  outb(0x21, 0xFF);
+  outb(0xA1, 0xFF);
+}
+
+void kpic_enable_irq(uint8_t irq) {
+  if (irq < 8) {
+    outb(0x21, inb(0x21) & ~(uint8_t)(1u << irq));
+  } else if (irq < 16) {
+    outb(0xA1, inb(0xA1) & ~(uint8_t)(1u << (irq - 8)));
+  }
+}
+
+void kpic_disable_irq(uint8_t irq) {
+  if (irq < 8) {
+    outb(0x21, inb(0x21) | (uint8_t)(1u << irq));
+  } else if (irq < 16) {
+    outb(0xA1, inb(0xA1) | (uint8_t)(1u << (irq - 8)));
+  }
+}

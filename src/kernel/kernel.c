@@ -10,28 +10,20 @@
 #include "../../include/nyvela/arch/x86_64/gdt.h"
 #include "../../include/nyvela/arch/x86_64/pic/pic.h"
 #include "../../include/nyvela/arch/x86_64/pit/pit.h"
-#include "../../include/nyvela/arch/x86_64/asm/io.h"
+#include "../../include/nyvela/fs/vfs.h"
+#include "../../include/nyvela/exec/exec.h"
+#include "../../include/nyvela/syscall/syscall.h"
+#include "../../include/nyvela/drivers/kbd/kbd.h"
+
+extern uint8_t shell_blob_start[];
+extern uint8_t shell_blob_end[];
+extern uint8_t hello_blob_start[];
+extern uint8_t hello_blob_end[];
 
 void krnl() {
-  asm volatile (
-    "mov $0x12345678, %%rax"
-    :
-    :
-    : "rax"
-  );
-
-  for (;;);
-}
-
-void umain(void) {
-  asm volatile (
-    "mov $0x12345678, %%rax"
-    :
-    :
-    : "rax"
-  );
-
-  for (;;);
+  for (;;) {
+    hlt();
+  }
 }
 
 void klog_ram_data() {
@@ -126,7 +118,6 @@ void ktest_kmalloc() {
 }
 
 void ktest_krealloc() {
-  // realloc(NULL, n) must behave like malloc.
   void* a = krealloc(NULL, 64);
 
   if (!a) {
@@ -138,7 +129,6 @@ void ktest_krealloc() {
     ((uint8_t*)a)[i] = (uint8_t)(i & 0xFF);
   }
 
-  // Growing must preserve existing data.
   void* b = krealloc(a, 128);
 
   if (!b) {
@@ -159,7 +149,6 @@ void ktest_krealloc() {
     ((uint8_t*)b)[i] = 0xA5;
   }
 
-  // Shrinking must preserve the prefix.
   void* c = krealloc(b, 32);
 
   if (!c) {
@@ -176,7 +165,6 @@ void ktest_krealloc() {
     }
   }
 
-  // Size 0 must free and return NULL.
   void* d = krealloc(c, 0);
 
   if (d != NULL) {
@@ -185,7 +173,6 @@ void ktest_krealloc() {
     return;
   }
 
-  // Oversize must fail without touching the old block.
   void* e = kmalloc(64);
 
   if (!e) {
@@ -291,6 +278,164 @@ void ktest_vmmap() {
   kprintsucc("vmmap test passed.", 0x0F);
 }
 
+void ktest_vfs() {
+  if (vfs_create("/test", false) != VFS_OK) {
+    kprintferr("vfs: create /test failed.", 0x0F);
+    return;
+  }
+
+  const char msg[] = "vfs-ok";
+  int64_t w = vfs_write("/test", msg, 6, 0);
+
+  if (w != 6) {
+    kprintferr("vfs: write /test failed.", 0x0F);
+    return;
+  }
+
+  char buf[16];
+  memset(buf, 0, sizeof(buf));
+
+  int64_t r = vfs_read("/test", buf, sizeof(buf) - 1, 0);
+
+  if (r != 6 || kmemcmp(buf, msg, 6) != 0) {
+    kprintferr("vfs: read /test mismatch.", 0x0F);
+    return;
+  }
+
+  char list[64];
+  int64_t l = vfs_list("/", list, sizeof(list));
+
+  if (l <= 0) {
+    kprintferr("vfs: list / failed.", 0x0F);
+    return;
+  }
+
+  bool found = false;
+  size_t pos = 0;
+
+  while (list[pos]) {
+    if (kstrncmp(&list[pos], "test\n", 5) == 0) {
+      found = true;
+      break;
+    }
+
+    while (list[pos] && list[pos] != '\n') pos++;
+    if (list[pos] == '\n') pos++;
+  }
+
+  if (!found) {
+    kprintferr("vfs: /test missing in ls.", 0x0F);
+    return;
+  }
+
+  kprintsucc("vfs test passed.", 0x0F);
+}
+
+void ktest_syscall() {
+  uint64_t ret = 0;
+
+  __asm__ volatile (
+    "mov $2, %%rax\n"
+    "int $0x80\n"
+    "mov %%rax, %0\n"
+    : "=r"(ret) :: "rax", "rcx", "r11", "memory"
+  );
+
+  if (ret != 0) {
+    kprintferr("syscall: yield failed.", 0x0F);
+    return;
+  }
+
+  __asm__ volatile (
+    "mov $1, %%rax\n"
+    "mov $99, %%rdi\n"
+    "xor %%rsi, %%rsi\n"
+    "xor %%rdx, %%rdx\n"
+    "int $0x80\n"
+    "mov %%rax, %0\n"
+    : "=r"(ret) :: "rax", "rdi", "rsi", "rdx", "rcx", "r11", "memory"
+  );
+
+  if ((int64_t)ret != (int64_t)VFS_ERR_INVAL) {
+    kprintferr("syscall: bad-fd check failed.", 0x0F);
+    return;
+  }
+
+  __asm__ volatile (
+    "mov $3, %%rax\n"
+    "mov $99, %%rdi\n"
+    "xor %%rsi, %%rsi\n"
+    "xor %%rdx, %%rdx\n"
+    "int $0x80\n"
+    "mov %%rax, %0\n"
+    : "=r"(ret) :: "rax", "rdi", "rsi", "rdx", "rcx", "r11", "memory"
+  );
+
+  if ((int64_t)ret != (int64_t)VFS_ERR_INVAL) {
+    kprintferr("syscall: read bad-fd check failed.", 0x0F);
+    return;
+  }
+
+  kprintsucc("syscall test passed.", 0x0F);
+}
+
+static void kload_user_bins(void) {
+  if (vfs_create("/bin", true) != VFS_OK) {
+    kprintferr("Failed to create /bin.", 0x0F);
+    hang();
+  }
+
+  uint64_t shell_size = (uint64_t)(shell_blob_end - shell_blob_start);
+
+  if (shell_size == 0 || shell_size > VFS_MAX_FILE_SIZE) {
+    kprintferr("Bad shell blob size.", 0x0F);
+    hang();
+  }
+
+  if (vfs_create("/bin/sh", false) != VFS_OK) {
+    kprintferr("Failed to create /bin/sh.", 0x0F);
+    hang();
+  }
+
+  if (vfs_write("/bin/sh", shell_blob_start, shell_size, 0) != (int64_t)shell_size) {
+    kprintferr("Failed to write /bin/sh.", 0x0F);
+    hang();
+  }
+
+  uint64_t hello_size = (uint64_t)(hello_blob_end - hello_blob_start);
+
+  if (hello_size == 0 || hello_size > VFS_MAX_FILE_SIZE) {
+    kprintferr("Bad hello blob size.", 0x0F);
+    hang();
+  }
+
+  if (vfs_create("/bin/hello", false) != VFS_OK) {
+    kprintferr("Failed to create /bin/hello.", 0x0F);
+    hang();
+  }
+
+  if (vfs_write("/bin/hello", hello_blob_start, hello_size, 0) != (int64_t)hello_size) {
+    kprintferr("Failed to write /bin/hello.", 0x0F);
+    hang();
+  }
+
+  static const char readme[] =
+    "Welcome to Nyvela!\n"
+    "Try: help, ls, ls /bin, cat /readme.txt, run hello\n";
+
+  if (vfs_create("/readme.txt", false) != VFS_OK) {
+    kprintferr("Failed to create /readme.txt.", 0x0F);
+    hang();
+  }
+
+  uint64_t rlen = sizeof(readme) - 1;
+
+  if (vfs_write("/readme.txt", readme, rlen, 0) != (int64_t)rlen) {
+    kprintferr("Failed to write /readme.txt.", 0x0F);
+    hang();
+  }
+}
+
 __attribute__((section(".text.entry")))
 void kmain() {
   kprintsucc("Nyvela kernel started.", 0x0F);
@@ -332,7 +477,7 @@ void kmain() {
   ktest_kmalloc();
   ktest_krealloc();
 
-  kprintinfo("Initializing IDT...", 0x0F);
+  kprintinfo("Initializing IDT (incl. syscall 0x80)...", 0x0F);
   
   if (!kidt_init()) {
     kprintferr("IDT initialization failed.", 0x0F);
@@ -359,6 +504,8 @@ void kmain() {
   ksetup_lapic_timer();
   
   kprintsucc("LAPIC timer setup complete.", 0x0F);
+
+  kpic_disable();
   
   if (!ktss_init()) {
     kprintferr("Failed to initialize TSS.", 0x0F);
@@ -366,61 +513,130 @@ void kmain() {
   }
 
   kprintsucc("Initialized TSS.", 0x0F);
+
+  kbd_init();
+
+  kprintsucc("Keyboard ready (IRQ1).", 0x0F);
     
-  current_thread = spawn_thread(krnl, 0);
+  kprintinfo("Initializing VFS (ramfs at /)...", 0x0F);
 
-  uint64_t old_cr3 = read_cr3();
+  if (!vfs_init()) {
+    kprintferr("VFS initialization failed.", 0x0F);
+    hang();
+  }
 
-  uint64_t new_cr3 = (uint64_t)kpalloc();
+  if (!syscall_init()) {
+    kprintferr("Syscall initialization failed.", 0x0F);
+    hang();
+  }
+
+  kprintsucc("VFS ready.", 0x0F);
+
+  kload_user_bins();
+
+  kprintsucc("User binaries ready (/bin/hello).", 0x0F);
+
+  ktest_vfs();
+  ktest_syscall();
+
+  thread_t *idle = spawn_thread(krnl, 0);
+
+  if (!idle) {
+    kprintferr("Failed to spawn idle thread.", 0x0F);
+    hang();
+  }
+
+  uint64_t new_cr3 = vmm_create_user_pml4();
 
   if (!new_cr3) {
-    kprintferr("Failed to allocate cr3 for umain.", 0x0F);
+    kprintferr("Failed to allocate cr3 for user.", 0x0F);
     hang();
   }
 
-  uint64_t *old_pml4 = (uint64_t *)(old_cr3 & ~0xFFFULL);
-  uint64_t *new_pml4 = (uint64_t *)new_cr3;
-
-  memset(new_pml4, 0, 0x1000);
-
-  for (uint64_t i = 0; i < 512; i++) {
-    new_pml4[i] = old_pml4[i];
-  }
-  
   write_cr3(new_cr3);
 
-  uint64_t phys = (uint64_t)kpalloc();
-  
-  if (!phys) {
-    kprintferr("Failed to allocate memory for umain.", 0x0F);
+  idle->context->cr3 = new_cr3;
+
+  for (uint64_t i = 0; i < SHELL_PAGES; i++) {
+    uint64_t phys = (uint64_t)kpalloc();
+
+    if (!phys) {
+      kprintferr("Failed to allocate memory for shell.", 0x0F);
+      hang();
+    }
+
+    if (!kvmmap(USER_CODE_VIRT + i * 4096, phys, 0x07)) {
+      kprintferr("Failed to map shell.", 0x0F);
+      hang();
+    }
+  }
+
+  if (exec_load("/bin/sh", USER_CODE_VIRT, SHELL_MAX) < 0) {
+    kprintferr("Failed to load /bin/sh.", 0x0F);
     hang();
   }
 
-  kvmmap(0x400000, phys, 0x07);
-  memcpy((void *)0x400000, umain, 0x1000);
-  
+
   uint64_t stack_phys = (uint64_t)kpalloc();
 
   if (!stack_phys) {
-    kprintferr("Failed to allocate stack for umain.", 0x0F);
+    kprintferr("Failed to allocate stack for shell.", 0x0F);
     hang();
   }
 
-  kvmmap(0x44F000, stack_phys, 0x07);
+  if (!kvmmap(USER_STACK_PAGE, stack_phys, 0x07)) {
+    kprintferr("Failed to map shell stack.", 0x0F);
+    __asm__ volatile ("cli\nhlt");
+  }
+
+  memset((void *)USER_STACK_PAGE, 0, 4096);
+
+  for (uint64_t i = 0; i < PROG_PAGES; i++) {
+    uint64_t phys = (uint64_t)kpalloc();
   
-  kvmmap(LAPIC_VIRT, kget_apic_base(), 0x03);
+    if (!phys) {
+      kprintferr("Failed to allocate program slot.", 0x0F);
+      hang();
+    }
 
-  kprintinfo("Switching to umain...", 0x0F);
+    if (!kvmmap(PROG_BASE + i * 4096, phys, 0x07)) {
+      kprintferr("Failed to map program slot.", 0x0F);
+      hang();
+    }
 
-  current_thread = spawn_thread((void (*)(void))0x400000, new_cr3);
+    memset((void *)(PROG_BASE + i * 4096), 0, 4096);
+  }
+  
+  uint64_t prog_stack = (uint64_t)kpalloc();
 
-  current_thread->context->cs = 0x18 | 3;
-  current_thread->context->ss = 0x20 | 3;
-  current_thread->context->rsp = 0x450000;
+  if (!prog_stack) {
+    kprintferr("Failed to allocate program stack.", 0x0F);
+    hang();
+  }
 
-  switch_context(current_thread->context);
+  if (!kvmmap(PROG_STACK_PAGE, prog_stack, 0x07)) {
+    kprintferr("Failed to map program stack.", 0x0F);
+    hang();
+  }
 
-  sti();
+  memset((void *)PROG_STACK_PAGE, 0, 4096);
+
+  kprintinfo("Switching to ring3 shell (/bin/sh)...", 0x0F);
+
+  thread_t *user = spawn_thread((void (*)(void))USER_CODE_VIRT, new_cr3);
+
+  if (!user) {
+    kprintferr("Failed to spawn shell thread.", 0x0F);
+    __asm__ volatile ("cli\nhlt");
+  }
+
+  user->context->cs = 0x18 | 3;
+  user->context->ss = 0x20 | 3;
+  user->context->rsp = USER_STACK_TOP;
+
+  current_thread = user;
+  tss.rsp0 = ((uint64_t)user->kernel_stack + 4096);
+  switch_context(user->context);
 
   for (;;) {
     hlt();

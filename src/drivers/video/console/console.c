@@ -52,6 +52,54 @@ void kprintnl() {
   }
 }
 
+void kwrite(const char *buf, uint64_t len, const uint8_t color) {
+  if (!buf) return;
+
+  uint8_t row = *ROW;
+  uint8_t col = *COLUMN;
+
+  for (uint64_t i = 0; i < len; i++) {
+    char c = buf[i];
+
+    if (c == '\n') {
+      kprintnl();
+      row = *ROW;
+      col = *COLUMN;
+      continue;
+    }
+
+    if (c == '\b') {
+      if (col > 0) {
+        col--;
+        *COLUMN = col;
+        vga_write(col, row, (uint16_t)' ' | (color << 8));
+      }
+      continue;
+    }
+
+    if (col >= VGA_WIDTH) {
+      kprintnl();
+      row = *ROW;
+      col = *COLUMN;
+    }
+
+    vga_write(col, row, (uint16_t)c | (color << 8));
+    ++col;
+    *COLUMN = col;
+  }
+}
+
+void kclear() {
+  for (uint8_t row = 0; row < VGA_HEIGHT; row++) {
+    for (uint8_t col = 0; col < VGA_WIDTH; col++) {
+      vga_write(col, row, ' ' | (0x07 << 8));
+    }
+  }
+
+  *ROW = 0;
+  *COLUMN = 0;
+}
+
 void _print_prefixed_str(const char *s, const char *prefix, const uint16_t colors) {
   kprints(part_lbrack, 0x0F);
   kprints(prefix, (uint8_t)(colors >> 8));

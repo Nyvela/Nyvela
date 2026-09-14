@@ -2,6 +2,7 @@
 #include "../../include/nyvela/mm/pmm.h"
 #include "../../include/nyvela/drivers/video/console/console.h"
 #include "../../include/nyvela/arch/x86_64/asm/cpu.h"
+#include "../../include/nyvela/lib/utils.h"
 
 bool kvmm_init() {
   uint64_t cr3 = read_cr3();
@@ -193,4 +194,22 @@ bool kvmmap(uint64_t virt, uint64_t phys, uint64_t flags) {
   write_cr3(cr3);
 
   return true;
+}
+
+uint64_t vmm_create_user_pml4(void) {
+  uint64_t new_pml4_phys = (uint64_t)kpalloc();
+
+  if (!new_pml4_phys) return 0;
+
+  uint64_t old_cr3 = read_cr3();
+  uint64_t *old_pml4 = (uint64_t *)(old_cr3 & ~0xFFFULL);
+  uint64_t *new_pml4 = (uint64_t *)new_pml4_phys;
+
+  memset(new_pml4, 0, 0x1000);
+
+  for (uint64_t i = 0; i < 512; i++) {
+    new_pml4[i] = old_pml4[i];
+  }
+
+  return new_pml4_phys;
 }
