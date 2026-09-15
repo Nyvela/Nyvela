@@ -353,9 +353,10 @@ fn sh_main() -> ! {
     let mut prog = [0u8; 256];
     let mut path = [0u8; 256];
 
-    write_str(b"Nyvela shell. Type 'help'.\n");
+    write_str(b"\nNyvela shell. Type 'help'.\n");
+
     loop {
-        write_str(b"nyvela> ");
+        write_str(b"Nyvela > ");
         let len = read_line(&mut line);
         run_line(&mut line, len, &mut list, &mut io, &mut prog, &mut path);
     }

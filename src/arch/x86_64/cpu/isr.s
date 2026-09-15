@@ -29,53 +29,59 @@ section .text
   extern kprintferr
 
 isr_de:
-  mov rdi, de_msg
-  mov rsi, 0x0F
-  call kprintferr
+  mov rdi, 0
+  xor rsi, rsi
+  xor rdx, rdx
+  mov rcx, rsp 
 
-  jmp halt
-
-isr_pf:
-  mov rdi, pf_msg
-  mov rsi, 0x0F
-  call kprintferr
-
-  add rsp, 8
-  jmp halt
-
-isr_gp:
-  mov rdi, gp_msg
-  mov rsi, 0x0F
-  call kprintferr
-  
-  add rsp, 8
-  jmp halt
-  
-halt:
-  hlt
-  jmp halt
-
-; Debug fault dumper entries. fault_dump(vec, err, has_err, frame*)
-; never returns (halts), so no register saving is needed.
-isr_ud: ; #UD has no CPU error code
-  mov rdi, 6
-  xor esi, esi
-  xor edx, edx
-  mov rcx, rsp
   call fault_dump
+
   cli
   hlt
-  jmp $-2
 
-isr_df: ; #DF pushes an error code (always 0)
+isr_pf:
   pop rsi ; err
   mov rdi, 8
   mov edx, 1
   mov rcx, rsp
   call fault_dump
+  
   cli
   hlt
-  jmp $-2
+
+isr_gp:
+  pop rsi ; err
+  mov rdi, 8
+  mov edx, 1
+  mov rcx, rsp
+  call fault_dump
+  
+  cli
+  hlt
+  
+halt:
+  hlt
+  jmp halt
+
+isr_ud:
+  mov rdi, 6
+  xor esi, esi
+  xor edx, edx
+  mov rcx, rsp
+  call fault_dump
+
+  cli
+  hlt  
+
+isr_df:
+  pop rsi ; err
+  mov rdi, 8
+  mov edx, 1
+  mov rcx, rsp
+  call fault_dump
+  
+  cli
+  hlt
 
 isr_lapic_timer:
   call save_context ; rax is now context_t*
@@ -83,57 +89,13 @@ isr_lapic_timer:
   jmp isr_lapic_timer_handler
 
 isr_pit:
-  ; isr_pit_handler() is C and may clobber caller-saved regs.
-  ; Save them so the 1000Hz PIT doesn't corrupt interrupted code.
-  push rax
-  push rcx
-  push rdx
-  push rsi
-  push rdi
-  push r8
-  push r9
-  push r10
-  push r11
   call isr_pit_handler
-  pop r11
-  pop r10
-  pop r9
-  pop r8
-  pop rdi
-  pop rsi
-  pop rdx
-  pop rcx
-  pop rax
   iretq
 
-; PS/2 keyboard, IRQ1 (PIC vector 0x21, ring0 only).
-; Same save discipline as isr_pit: the C handler may clobber caller-saved regs.
 isr_kbd:
-  push rax
-  push rcx
-  push rdx
-  push rsi
-  push rdi
-  push r8
-  push r9
-  push r10
-  push r11
   call kbd_irq_handler
-  pop r11
-  pop r10
-  pop r9
-  pop r8
-  pop rdi
-  pop rsi
-  pop rdx
-  pop rcx
-  pop rax
   iretq
 
-; int 0x80 syscall entry (ring3 -> ring0).
-; CPU pushes ss/rsp/rflags/cs/rip, loads rsp0 from TSS.
-; Frame layout must match syscall_frame_t in syscall.h:
-;   r15..rax (15 pushes) then rip/cs/rflags/rsp/ss from CPU.
 isr_syscall:
   push rax
   push rdi
