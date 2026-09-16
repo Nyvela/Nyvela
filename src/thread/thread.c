@@ -12,12 +12,10 @@ uint64_t threads_length = 0;
 uint64_t threads_cap = 0;
 uint64_t next_thread_id = 1;
 
-thread_t* spawn_thread(void (*entry)(void), uint64_t cr3) {
-  if (!entry) return NULL;
-  
+thread_t* allocate_thread() {
   if (threads_cap == 0) {
     threads = kmalloc(sizeof(thread_t*) * 8);
-    
+
     if (!threads) {
       return NULL;
     }
@@ -47,21 +45,45 @@ thread_t* spawn_thread(void (*entry)(void), uint64_t cr3) {
   }
 
   memset(context, 0, sizeof(context_t));
-  
-  if (!cr3) {
-    cr3 = read_cr3();
-  }
 
-  context->rip = (uint64_t)entry;
   context->rsp = (uint64_t)kernel_stack + 4096;
-  context->rflags = 0x202;
-  context->cs = GDT_KCODE_LM_SEGMENT;
-  context->ss = GDT_KDATA_SEGMENT;
-  context->cr3 = cr3;
 
-  thread->tid = next_thread_id++;
   thread->context = context;
   thread->kernel_stack = kernel_stack;
+
+  return thread;
+}
+
+void free_thread(thread_t* thread) {
+  if (!thread) return;
+
+  if (thread->kernel_stack) {
+    kpfree(thread->kernel_stack);
+  }
+
+  if (thread->context) {
+    kfree(thread->context);
+  }
+
+  kfree(thread);
+}
+
+thread_t* spawn_thread(void (*entry)(void)) {
+  if (!entry) return NULL;
+
+  thread_t* thread = allocate_thread();
+
+  if (!thread) return NULL;
+
+  uint64_t cr3 = read_cr3();
+
+  thread->context->rip = (uint64_t)entry;
+  thread->context->rflags = 0x202;
+  thread->context->cs = GDT_KCODE_LM_SEGMENT;
+  thread->context->ss = GDT_KDATA_SEGMENT;
+  thread->context->cr3 = cr3;
+
+  thread->tid = next_thread_id++;
   thread->state = THREAD_READY;
   thread->exit_code = 0;
 
@@ -70,10 +92,7 @@ thread_t* spawn_thread(void (*entry)(void), uint64_t cr3) {
     thread_t **tmp = (thread_t**)kmalloc(sizeof(thread_t*) * new_cap);
 
     if (!tmp) {
-      kpfree(kernel_stack);
-      kfree(context);
-      kfree(thread);
-
+      free_thread(thread);
       return NULL;
     }
 

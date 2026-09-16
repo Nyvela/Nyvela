@@ -194,7 +194,7 @@ static void sys_exec(syscall_frame_t *f) {
     return;
   }
 
-  thread_t *child = spawn_thread((void (*)(void))PROG_BASE, 0);
+  thread_t *child = spawn_thread((void (*)(void))PROG_BASE);
 
   if (!child) {
     f->rax = (uint64_t)(int64_t)VFS_ERR_NOSPACE;

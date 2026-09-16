@@ -539,7 +539,7 @@ void kmain() {
   ktest_vfs();
   ktest_syscall();
 
-  thread_t *idle = spawn_thread(krnl, 0);
+  thread_t *idle = spawn_thread(krnl);
 
   if (!idle) {
     kprintferr("Failed to spawn idle thread.", 0x0F);
@@ -623,7 +623,7 @@ void kmain() {
 
   kprintinfo("Switching to ring3 shell (/bin/sh)...", 0x0F);
 
-  thread_t *user = spawn_thread((void (*)(void))USER_CODE_VIRT, new_cr3);
+  thread_t *user = spawn_thread((void (*)(void))USER_CODE_VIRT);
 
   if (!user) {
     kprintferr("Failed to spawn shell thread.", 0x0F);
