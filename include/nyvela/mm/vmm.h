@@ -21,6 +21,6 @@ bool kvmm_init();
 bool kvmmap(uint64_t virt, uint64_t phys, uint64_t flags);
 bool kvmunmap(uint64_t virt);
 
-uint64_t vmm_create_user_pml4(void);
+uint64_t kvmm_create_user_pml4(void);
 
 #endif // NYVVMM_H
