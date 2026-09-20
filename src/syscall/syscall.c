@@ -10,6 +10,9 @@
 #include "../../include/nyvela/mm/heap.h"
 #include "../../include/nyvela/mm/vmm.h"
 #include "../../include/nyvela/lib/utils.h"
+#include "../../include/nyvela/ipc/ipc.h"
+#include "../../include/nyvela/arch/x86_64/asm/cpu.h"
+#include "../../include/nyvela/mm/pmm.h"
 
 extern void switch_context(context_t *context);
 
@@ -80,7 +83,7 @@ static void sys_exit(syscall_frame_t *f) {
   current_thread = next;
 
   if (next->kernel_stack) {
-    tss.rsp0 = ((uint64_t)next->kernel_stack + 4096);
+    tss.rsp0 = ((uint64_t)next->kernel_stack + 4096 * KERNEL_STACK_SIZE_IN_PAGES);
   }
 
   switch_context(next->context);
@@ -187,29 +190,103 @@ static void sys_exec(syscall_frame_t *f) {
     return;
   }
 
-  int64_t loaded = exec_load(path, PROG_BASE, PROG_MAX);
+  int64_t size = vfs_size(path);
+  if (size < 0) {
+    f->rax = (uint64_t)size;
+    return;
+  }
+  if (size == 0 || (uint64_t)size > PROG_MAX) {
+    f->rax = (uint64_t)(int64_t)VFS_ERR_NOSPACE;
+    return;
+  }
+  uint64_t pages = ((uint64_t)size + 4095) / 4096;
+  
+  cli();
 
-  if (loaded < 0) {
-    f->rax = (uint64_t)loaded;
+  thread_t *child = spawn_thread((void (*)(void))PROG_BASE);
+  
+  if (!child) {
+    sti();
+    f->rax = (uint64_t)(int64_t)VFS_ERR_NOSPACE;
     return;
   }
 
-  thread_t *child = spawn_thread((void (*)(void))PROG_BASE);
+  for (uint64_t i = 0; i < PROG_PAGES; i++) {
+    kvmunmap_and_free_at(child->context->cr3, PROG_BASE + i * 4096);
+  }
 
-  if (!child) {
-    f->rax = (uint64_t)(int64_t)VFS_ERR_NOSPACE;
+  for (uint64_t i = 0; i < pages; i++) {
+    uint64_t phys = (uint64_t)kpalloc();
+    if (!phys) {
+      for (uint64_t j = 0; j < i; j++) {
+        kvmunmap_and_free_at(child->context->cr3, PROG_BASE + j * 4096);
+      }
+      for (uint64_t j = 0; j < threads_length; j++) {
+        if (threads[j] == child) {
+          for (uint64_t k = j; k + 1 < threads_length; k++) threads[k] = threads[k+1];
+          threads_length--;
+          break;
+        }
+      }
+      free_thread(child);
+      sti();
+      f->rax = (uint64_t)(int64_t)VFS_ERR_NOSPACE;
+      return;
+    }
+    memset((void*)phys, 0, 0x1000);
+    kvmmap_at(child->context->cr3, PROG_BASE + i * 4096, phys, 0x07);
+  }
+  
+  uint64_t old = read_cr3();
+  write_cr3(child->context->cr3);
+  
+  int64_t read = vfs_read(path, (void*)PROG_BASE, (uint64_t)size, 0);
+  
+  write_cr3(old);
+
+  if (read < 0 || read != size) {
+    for (uint64_t i = 0; i < pages; i++) {
+      kvmunmap_and_free_at(child->context->cr3, PROG_BASE + i * 4096);
+    }
+    for (uint64_t i = 0; i < threads_length; i++) {
+      if (threads[i] == child) {
+        for (uint64_t j = i; j + 1 < threads_length; j++) threads[j] = threads[j+1];
+        threads_length--;
+        break;
+      }
+    }
+    free_thread(child);
+    sti();
+    f->rax = (uint64_t)read;
     return;
   }
 
   child->context->cs = 0x18 | 3;
   child->context->ss = 0x20 | 3;
   child->context->rsp = PROG_STACK_TOP;
+  
+  sti();
 
   while (child->state != THREAD_DEAD) {
     __asm__ volatile ("sti; hlt; cli" ::: "memory");
   }
 
-  f->rax = (uint64_t)child->exit_code;
+  uint64_t code = child->exit_code;
+
+  for (uint64_t i = 0; i < threads_length; i++) {
+    if (threads[i] == child) {
+      for (uint64_t j = i; j + 1 < threads_length; j++) {
+        threads[j] = threads[j + 1];
+      }
+
+      threads_length--;
+      break;
+    }
+  }
+
+  free_thread(child);
+   
+  f->rax = code;
 }
 
 static void sys_fs_create(syscall_frame_t *f) {
@@ -346,6 +423,20 @@ static void sys_fs_list(syscall_frame_t *f) {
   f->rax = (uint64_t)r;
 }
 
+void sys_ipc(syscall_frame_t *f) {
+  ipc_msg_t msg = (ipc_msg_t){
+    .status = IPC_SENT,
+    .msg = (uint8_t *)f->rsi,
+    .target = (uint16_t)f->rdi,
+    .size = f->rdx
+  };
+
+  if (msg.status == IPC_SENT) {
+    kprintinfo("IPC message sent.", 0x0F);
+    kprintinfo(msg.msg, 0x0F);
+  }
+}
+
 void syscall_handler(syscall_frame_t *f) {
   if (!f) return;
 
@@ -364,6 +455,10 @@ void syscall_handler(syscall_frame_t *f) {
 
     case SYS_READ:
       sys_read(f);
+      break;
+
+    case SYS_IPC:
+      sys_ipc(f);
       break;
 
     case SYS_FS_CREATE:

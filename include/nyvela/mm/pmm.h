@@ -28,7 +28,9 @@ _Static_assert(sizeof(e820_entry_t) == 24, "Invalid E820 entry size");
 bool kpmm_init();
 
 void* kpalloc();
+void* kpalloc_contiguous(uint64_t pages);
 void kpfree(void* page);
+void kpfree_contiguous(void* page, uint64_t pages);
 
 extern uint64_t* MMAP_COUNT;
 extern e820_entry_t* MMAP_ENTRIES;

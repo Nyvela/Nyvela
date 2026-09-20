@@ -35,7 +35,7 @@ void scheduler_tick(void) {
 
   if (next != current_thread) current_thread = next;
   
-  tss.rsp0 = (uint64_t)current_thread->kernel_stack + 4096;
+  tss.rsp0 = (uint64_t)current_thread->kernel_stack + 4096 * KERNEL_STACK_SIZE_IN_PAGES;
 
   switch_context(current_thread->context);
   __builtin_unreachable();  

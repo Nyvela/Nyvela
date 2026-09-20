@@ -18,9 +18,24 @@
 
 bool kvmm_init();
 
+bool kvmmap_at(uint64_t cr3, uint64_t virt, uint64_t phys, uint64_t flags);
 bool kvmmap(uint64_t virt, uint64_t phys, uint64_t flags);
+
 bool kvmunmap(uint64_t virt);
+bool kvmunmap_at(uint64_t cr3, uint64_t virt);
+
+bool kvmunmap_and_free(uint64_t virt);
+bool kvmunmap_and_free_at(uint64_t cr3, uint64_t virt);
+
+uint64_t* kget_pte_addr(uint64_t virt);
+uint64_t* kget_pte_addr_at(uint64_t cr3, uint64_t virt);
+
+uint64_t kget_phys_page_addr(uint64_t virt);
+uint64_t kget_phys_page_addr_at(uint64_t cr3, uint64_t virt);
 
 uint64_t kvmm_create_user_pml4(void);
+void kvmm_free_user_pml4(uint64_t pml4);
+
+bool is_shared_user_page(uint64_t virt);
 
 #endif // NYVVMM_H

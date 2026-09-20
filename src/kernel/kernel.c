@@ -170,7 +170,7 @@ void kuserspace_init() {
   user->context->rsp = USER_STACK_TOP;
 
   current_thread = user;
-  tss.rsp0 = ((uint64_t)user->kernel_stack + 4096);
+  tss.rsp0 = ((uint64_t)user->kernel_stack + 4096 * KERNEL_STACK_SIZE_IN_PAGES);
   switch_context(user->context);
 }
 

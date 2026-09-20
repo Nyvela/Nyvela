@@ -30,7 +30,7 @@ thread_t* allocate_thread() {
     return NULL;
   }
 
-  void *kernel_stack = kpalloc();
+  void *kernel_stack = kpalloc_contiguous(KERNEL_STACK_SIZE_IN_PAGES);
 
   if (!kernel_stack) {
     kfree(thread);
@@ -41,13 +41,13 @@ thread_t* allocate_thread() {
 
   if (!context) {
     kfree(thread);
-    kpfree(kernel_stack);
+    kpfree_contiguous(kernel_stack, KERNEL_STACK_SIZE_IN_PAGES);
     return NULL;
   }
 
   memset(context, 0, sizeof(context_t));
 
-  context->rsp = (uint64_t)kernel_stack + 4096;
+  context->rsp = (uint64_t)kernel_stack + 4096 * KERNEL_STACK_SIZE_IN_PAGES;
 
   thread->context = context;
   thread->kernel_stack = kernel_stack;
@@ -59,10 +59,11 @@ void free_thread(thread_t* thread) {
   if (!thread) return;
 
   if (thread->kernel_stack) {
-    kpfree(thread->kernel_stack);
+    kpfree_contiguous(thread->kernel_stack, KERNEL_STACK_SIZE_IN_PAGES);
   }
 
   if (thread->context) {
+    kvmm_free_user_pml4(thread->context->cr3);
     kfree(thread->context);
   }
 
