@@ -1,18 +1,17 @@
 section .data
-  CONTEXT_T_SIZE equ 168
+  CONTEXT_T_SIZE equ 160
   UINT64_T_SIZE equ 8
 
 section .bss
   ctx_ptr resq 1
   rsp_reg resq 1
-  ctx_pool resq 84 ; 4 * 168 / 8
-  ctx_idx resq 1
 
 section .text
   global save_context
   global switch_context
   
   extern current_thread
+  extern current_process
 
 ; Stack currently looks like this
 ; [  ss      ]
@@ -155,8 +154,9 @@ save_context:
     ret
 
 ; rdi = context_t*
-switch_context: 
-  mov rax, [rdi + 160]
+switch_context:
+  mov rax, [rel current_process]
+  mov rax, [rax]
   mov cr3, rax
 
   mov rdx, [rdi + 144]

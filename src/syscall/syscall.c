@@ -81,6 +81,7 @@ static void sys_exit(syscall_frame_t *f) {
   }
 
   current_thread = next;
+  current_process = next->process;
 
   if (next->kernel_stack) {
     tss.rsp0 = ((uint64_t)next->kernel_stack + 4096 * KERNEL_STACK_SIZE_IN_PAGES);
@@ -203,7 +204,7 @@ static void sys_exec(syscall_frame_t *f) {
   
   cli();
 
-  thread_t *child = spawn_thread((void (*)(void))PROG_BASE);
+  process_t *child = spawn_process((void (*)(void))PROG_BASE);
   
   if (!child) {
     sti();
@@ -212,33 +213,36 @@ static void sys_exec(syscall_frame_t *f) {
   }
 
   for (uint64_t i = 0; i < PROG_PAGES; i++) {
-    kvmunmap_and_free_at(child->context->cr3, PROG_BASE + i * 4096);
+    kvmunmap_and_free_at(child->cr3, PROG_BASE + i * 4096);
   }
 
   for (uint64_t i = 0; i < pages; i++) {
     uint64_t phys = (uint64_t)kpalloc();
     if (!phys) {
       for (uint64_t j = 0; j < i; j++) {
-        kvmunmap_and_free_at(child->context->cr3, PROG_BASE + j * 4096);
+        kvmunmap_and_free_at(child->cr3, PROG_BASE + j * 4096);
       }
+      
       for (uint64_t j = 0; j < threads_length; j++) {
-        if (threads[j] == child) {
-          for (uint64_t k = j; k + 1 < threads_length; k++) threads[k] = threads[k+1];
-          threads_length--;
+        if (processes[j] == child) {
+          for (uint64_t k = j; k + 1 < processes_length; k++) processes[k] = processes[k + 1];
+          processes_length--;
           break;
         }
       }
-      free_thread(child);
+
+      free_process(child);
       sti();
+
       f->rax = (uint64_t)(int64_t)VFS_ERR_NOSPACE;
       return;
     }
     memset((void*)phys, 0, 0x1000);
-    kvmmap_at(child->context->cr3, PROG_BASE + i * 4096, phys, 0x07);
+    kvmmap_at(child->cr3, PROG_BASE + i * 4096, phys, 0x07);
   }
   
   uint64_t old = read_cr3();
-  write_cr3(child->context->cr3);
+  write_cr3(child->cr3);
   
   int64_t read = vfs_read(path, (void*)PROG_BASE, (uint64_t)size, 0);
   
@@ -246,45 +250,46 @@ static void sys_exec(syscall_frame_t *f) {
 
   if (read < 0 || read != size) {
     for (uint64_t i = 0; i < pages; i++) {
-      kvmunmap_and_free_at(child->context->cr3, PROG_BASE + i * 4096);
+      kvmunmap_and_free_at(child->cr3, PROG_BASE + i * 4096);
     }
-    for (uint64_t i = 0; i < threads_length; i++) {
-      if (threads[i] == child) {
-        for (uint64_t j = i; j + 1 < threads_length; j++) threads[j] = threads[j+1];
-        threads_length--;
+    for (uint64_t i = 0; i < processes_length; i++) {
+      if (processes[i] == child) {
+        for (uint64_t j = i; j + 1 < processes_length; j++) processes[j] = processes[j + 1];
+        processes_length--;
         break;
       }
     }
-    free_thread(child);
+    free_process(child);
     sti();
+
     f->rax = (uint64_t)read;
     return;
   }
 
-  child->context->cs = 0x18 | 3;
-  child->context->ss = 0x20 | 3;
-  child->context->rsp = PROG_STACK_TOP;
+  child->threads[0]->context->cs = 0x18 | 3;
+  child->threads[0]->context->ss = 0x20 | 3;
+  child->threads[0]->context->rsp = PROG_STACK_TOP;
   
   sti();
 
-  while (child->state != THREAD_DEAD) {
+  while (child->threads[0]->state != THREAD_DEAD) {
     __asm__ volatile ("sti; hlt; cli" ::: "memory");
   }
 
-  uint64_t code = child->exit_code;
+  uint64_t code = child->threads[0]->exit_code;
 
-  for (uint64_t i = 0; i < threads_length; i++) {
-    if (threads[i] == child) {
-      for (uint64_t j = i; j + 1 < threads_length; j++) {
-        threads[j] = threads[j + 1];
+  for (uint64_t i = 0; i < processes_length; i++) {
+    if (processes[i] == child) {
+      for (uint64_t j = i; j + 1 < processes_length; j++) {
+        processes[j] = processes[j + 1];
       }
 
-      threads_length--;
+      processes_length--;
       break;
     }
   }
 
-  free_thread(child);
+  free_process(child);
    
   f->rax = code;
 }

@@ -29,6 +29,8 @@ bool kpmm_init();
 
 void* kpalloc();
 void* kpalloc_contiguous(uint64_t pages);
+void* kpalloc_top(void);
+
 void kpfree(void* page);
 void kpfree_contiguous(void* page, uint64_t pages);
 

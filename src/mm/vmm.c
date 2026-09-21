@@ -230,6 +230,7 @@ bool kvmmap_at(uint64_t cr3, uint64_t virt, uint64_t phys, uint64_t flags) {
   }
 
   pt[pt_index] = (phys & ~0xFFFULL) | flags;
+  if ((cr3 & ~0xFFFULL) == (read_cr3() & ~0xFFFULL)) invlpg(virt);
   return true;
 }
 

@@ -55,6 +55,7 @@ bool ksetup_lapic_timer() {
   uint32_t elapsed = 0xFFFFFFFF - current;
   
   uint32_t counts_1ms = elapsed / 1000;
+  if (counts_1ms < 1000) counts_1ms = 1000;
 
   klapic_write(LAPIC_LVT_TIMER, LAPIC_TIMER_VECTOR | LAPIC_TIMER_PERIODIC);
   klapic_write(LAPIC_TIMER_INIT, counts_1ms);

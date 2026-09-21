@@ -16,6 +16,7 @@
 #include "../../include/nyvela/drivers/kbd/kbd.h"
 #include "../../include/nyvela/ktests/ktests.h"
 #include "../../include/nyvela/drivers/video/vga/vga.h"
+#include "../../include/nyvela/process/process.h"
 
 extern uint8_t shell_blob_start[];
 extern uint8_t shell_blob_end[];
@@ -86,11 +87,18 @@ static void kload_user_bins(void) {
 }
 
 void kuserspace_init() {
-  thread_t *idle = spawn_thread(krnl);
+  process_t *idle = spawn_process(krnl);
 
   if (!idle) {
-    kprintferr("Failed to spawn idle thread.", 0x0F);
+    kprintferr("Failed to spawn idle process.", 0x0F);
     hang();
+  }
+
+  process_t *user = spawn_process((void (*)(void))USER_CODE_VIRT);
+
+  if (!user) {
+    kprintferr("Failed to spawn shell process.", 0x0F);
+    __asm__ volatile ("cli\nhlt");
   }
 
   for (uint64_t i = 0; i < SHELL_PAGES; i++) {
@@ -101,16 +109,21 @@ void kuserspace_init() {
       hang();
     }
 
-    if (!kvmmap(USER_CODE_VIRT + i * 4096, phys, 0x07)) {
+    if (!kvmmap_at(user->cr3, USER_CODE_VIRT + i * 4096, phys, 0x07)) {
       kprintferr("Failed to map shell.", 0x0F);
       hang();
     }
   }
+  
+  uint64_t old_cr3 = read_cr3();
+  write_cr3(user->cr3);
 
   if (exec_load("/bin/sh", USER_CODE_VIRT, SHELL_MAX) < 0) {
     kprintferr("Failed to load /bin/sh.", 0x0F);
     hang();
   }
+
+  write_cr3(old_cr3);
 
   uint64_t stack_phys = (uint64_t)kpalloc();
 
@@ -119,12 +132,12 @@ void kuserspace_init() {
     hang();
   }
 
-  if (!kvmmap(USER_STACK_PAGE, stack_phys, 0x07)) {
+  if (!kvmmap_at(user->cr3, USER_STACK_PAGE, stack_phys, 0x07)) {
     kprintferr("Failed to map shell stack.", 0x0F);
     __asm__ volatile ("cli\nhlt");
   }
 
-  memset((void *)USER_STACK_PAGE, 0, 4096);
+  memset((void *)stack_phys, 0, 4096);
 
   for (uint64_t i = 0; i < PROG_PAGES; i++) {
     uint64_t phys = (uint64_t)kpalloc();
@@ -134,12 +147,12 @@ void kuserspace_init() {
       hang();
     }
 
-    if (!kvmmap(PROG_BASE + i * 4096, phys, 0x07)) {
+    if (!kvmmap_at(user->cr3, PROG_BASE + i * 4096, phys, 0x07)) {
       kprintferr("Failed to map program slot.", 0x0F);
       hang();
     }
 
-    memset((void *)(PROG_BASE + i * 4096), 0, 4096);
+    memset((void *)phys, 0, 4096);
   }
   
   uint64_t prog_stack = (uint64_t)kpalloc();
@@ -149,29 +162,22 @@ void kuserspace_init() {
     hang();
   }
 
-  if (!kvmmap(PROG_STACK_PAGE, prog_stack, 0x07)) {
+  if (!kvmmap_at(user->cr3, PROG_STACK_PAGE, prog_stack, 0x07)) {
     kprintferr("Failed to map program stack.", 0x0F);
     hang();
   }
 
-  memset((void *)PROG_STACK_PAGE, 0, 4096);
+  memset((void *)prog_stack, 0, 4096);
 
   kprintinfo("Switching to ring3 shell (/bin/sh)...", 0x0F);
 
-  thread_t *user = spawn_thread((void (*)(void))USER_CODE_VIRT);
+  user->threads[0]->context->cs = 0x18 | 3;
+  user->threads[0]->context->ss = 0x20 | 3;
+  user->threads[0]->context->rsp = USER_STACK_TOP;
 
-  if (!user) {
-    kprintferr("Failed to spawn shell thread.", 0x0F);
-    __asm__ volatile ("cli\nhlt");
-  }
-
-  user->context->cs = 0x18 | 3;
-  user->context->ss = 0x20 | 3;
-  user->context->rsp = USER_STACK_TOP;
-
-  current_thread = user;
-  tss.rsp0 = ((uint64_t)user->kernel_stack + 4096 * KERNEL_STACK_SIZE_IN_PAGES);
-  switch_context(user->context);
+  current_thread = user->threads[0];
+  tss.rsp0 = ((uint64_t)user->threads[0]->kernel_stack + 4096 * KERNEL_STACK_SIZE_IN_PAGES);
+  switch_context(user->threads[0]->context);
 }
 
 __attribute__((section(".text.entry")))

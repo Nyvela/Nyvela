@@ -51,7 +51,7 @@ isr_pf:
 
 isr_gp:
   pop rsi ; err
-  mov rdi, 8
+  mov rdi, 0x0D
   mov edx, 1
   mov rcx, rsp
   call fault_dump

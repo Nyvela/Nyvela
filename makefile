@@ -19,7 +19,7 @@ IMAGE := $(BUILD)/os.img
 CFLAGS := -ffreestanding -m64 -mno-red-zone \
           -fno-stack-protector -fno-pie \
           -Wall -Wextra \
-          -Iinclude
+          -Iinclude -g
 
 PATH := $(HOME)/.cargo/bin:$(PATH)
 
@@ -104,7 +104,7 @@ $(KERNEL): $(KERNEL_OBJ)
 	$(LD) $(LDFLAGS) -o $(BUILD)/kernel.elf $(KERNEL_OBJ)
 	$(OBJCOPY) -O binary $(BUILD)/kernel.elf $@
 
-KERNEL_SECTORS := 96
+KERNEL_SECTORS := 97
 KERNEL_LBA := 37
 
 $(IMAGE): $(BOOT) $(STAGE1) $(STAGE2) $(KERNEL)

@@ -70,22 +70,54 @@ void* kpalloc() {
   return NULL;
 }
 
+void* kpalloc_top(void) {
+  const uint64_t first_page = ((uint64_t)&kernel_end + 4095) / 4096;
+  
+  for (uint64_t page = FRAME_COUNT; page-- > first_page;) {
+    if (BITMAP[page / 8] & (BITMAP_FREE << (page % 8))) {
+      uint64_t phys = page * 0x1000;
+      if (phys >= 0x400000 && phys < 0x600000) continue;
+      BITMAP[page / 8] &= ~(BITMAP_FREE << (page % 8));
+      return (void*)phys;
+    }
+  }
+  
+  return NULL;
+}
+
 void* kpalloc_contiguous(uint64_t pages) {
   if (pages == 0) return NULL;
   if (pages == 1) return kpalloc();
+  
   const uint64_t first_page = ((uint64_t)&kernel_end + 4095) / 4096;
   const uint64_t last_page = FRAME_COUNT;
+  
   for (uint64_t page = first_page; page + pages <= last_page; page++) {
     bool ok = true;
+ 
     for (uint64_t i = 0; i < pages; i++) {
-      if (!(BITMAP[(page+i) / 8] & (BITMAP_FREE << ((page+i) % 8)))) { ok = false; break; }
+      uint64_t phys = (page + i) * 0x1000;
+      if (phys >= 0x400000 && phys < 0x600000) {
+        ok = false;
+        break;
+      }
+  
+      if (!(BITMAP[(page + i) / 8] & (BITMAP_FREE << ((page + i) % 8)))) { 
+        ok = false;
+        break;
+      }  
     }
+    
     if (!ok) continue;
+    
     for (uint64_t i = 0; i < pages; i++) {
-      BITMAP[(page+i) / 8] &= ~(BITMAP_FREE << ((page+i) % 8));
+      BITMAP[(page + i) / 8] &= ~(BITMAP_FREE << ((page + i) % 8));
+    
     }
+    
     return (void*)(page * 0x1000);
   }
+
   return NULL;
 }
 

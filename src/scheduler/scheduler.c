@@ -33,7 +33,10 @@ thread_t* scheduler_next() {
 void scheduler_tick(void) {
   thread_t *next = scheduler_next();
 
-  if (next != current_thread) current_thread = next;
+  if (next != current_thread) { 
+    current_thread = next;
+    current_process = next->process;
+  }
   
   tss.rsp0 = (uint64_t)current_thread->kernel_stack + 4096 * KERNEL_STACK_SIZE_IN_PAGES;
 

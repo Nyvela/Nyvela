@@ -5,6 +5,9 @@
 #include "../../include/nyvela/mm/pmm.h"
 #include "../../include/nyvela/lib/utils.h"
 #include "../../include/nyvela/mm/vmm.h"
+#include "../../include/nyvela/process/process.h"
+
+extern uint8_t* kernel_end;
 
 thread_t **threads;
 thread_t *current_thread;
@@ -30,7 +33,26 @@ thread_t* allocate_thread() {
     return NULL;
   }
 
-  void *kernel_stack = kpalloc_contiguous(KERNEL_STACK_SIZE_IN_PAGES);
+  
+  void *kernel_stack = NULL;
+  
+  if (KERNEL_STACK_SIZE_IN_PAGES == 1) { 
+    kernel_stack = kpalloc_top();
+  } else {
+    kernel_stack = kpalloc_contiguous(KERNEL_STACK_SIZE_IN_PAGES);
+    
+    if (kernel_stack && (uint64_t)kernel_stack < 0x600000) {
+      kpfree_contiguous(kernel_stack, KERNEL_STACK_SIZE_IN_PAGES);
+      kernel_stack = NULL;
+      
+      for (uint64_t p = FRAME_COUNT; p-- > (((uint64_t)&kernel_end + 4095) / 4096) + KERNEL_STACK_SIZE_IN_PAGES;) {
+        (void)p; 
+        break;
+      }
+      
+      kernel_stack = kpalloc_contiguous(KERNEL_STACK_SIZE_IN_PAGES);
+    }
+  }
 
   if (!kernel_stack) {
     kfree(thread);
@@ -51,6 +73,7 @@ thread_t* allocate_thread() {
 
   thread->context = context;
   thread->kernel_stack = kernel_stack;
+  thread->process = current_process;
 
   return thread;
 }
@@ -63,7 +86,6 @@ void free_thread(thread_t* thread) {
   }
 
   if (thread->context) {
-    kvmm_free_user_pml4(thread->context->cr3);
     kfree(thread->context);
   }
 
@@ -81,7 +103,6 @@ thread_t* spawn_thread(void (*entry)(void)) {
   thread->context->rflags = 0x202;
   thread->context->cs = GDT_KCODE_LM_SEGMENT;
   thread->context->ss = GDT_KDATA_SEGMENT;
-  thread->context->cr3 = kvmm_create_user_pml4();
 
   thread->tid = next_thread_id++;
   thread->state = THREAD_READY;

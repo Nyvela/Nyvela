@@ -12,8 +12,6 @@ typedef struct context_t {
   uint64_t rflags;
   uint64_t cs;
   uint64_t ss;
-
-  uint64_t cr3;
 } context_t;
 
 _Static_assert(offsetof(context_t, rax) == 0, "rax offset");
@@ -36,9 +34,8 @@ _Static_assert(offsetof(context_t, rip) == 128, "rip offset");
 _Static_assert(offsetof(context_t, rflags) == 136, "rflags offset");
 _Static_assert(offsetof(context_t, cs) == 144, "cs offset");
 _Static_assert(offsetof(context_t, ss) == 152, "ss offset");
-_Static_assert(offsetof(context_t, cr3) == 160, "cr3 offset");
 
-_Static_assert(sizeof(context_t) == 168, "context_t has unexpected size");
+_Static_assert(sizeof(context_t) == 160, "context_t has unexpected size");
 
 context_t save_context();
 void switch_context(context_t* context);

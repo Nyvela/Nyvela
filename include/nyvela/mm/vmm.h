@@ -16,6 +16,12 @@
 #define PROG_STACK_TOP 0x600000ULL
 #define PROG_STACK_PAGE (PROG_STACK_TOP - 0x1000ULL)
 
+typedef struct vm_area {
+  uint64_t start, end;
+  uint64_t flags;
+  struct vm_area *next;
+} vm_area_t;
+
 bool kvmm_init();
 
 bool kvmmap_at(uint64_t cr3, uint64_t virt, uint64_t phys, uint64_t flags);
