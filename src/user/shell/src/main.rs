@@ -341,7 +341,10 @@ fn run_line(
         sys_exit(0);
     } else if eq_span(line, &argv[0], b"ipc-test") {
         let hello = b"hello\0";
-        sys_ipc(4, hello.as_ptr(), hello.len() as u64);
+        sys_ipc(1, hello.as_ptr(), hello.len() as u64);
+    } else if eq_span(line, &argv[0], b"ipc-poll") {
+        let msg: *const u8 = 0x4001F0 as *const u8;
+        sys_write(1, unsafe { core::slice::from_raw_parts(msg, 5) });
     } else {
         write_str(b"unknown command: ");
         write_str(&line[argv[0].0..argv[0].0 + argv[0].1]);

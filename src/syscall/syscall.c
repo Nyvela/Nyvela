@@ -63,6 +63,62 @@ static int copy_to_user(uint64_t uaddr, const void *kbuf, uint64_t len) {
   return 0;
 }
 
+static int copy_to_user_at(uint64_t cr3, uint64_t uaddr, const void *kbuf, uint64_t len) {
+  if (len == 0)
+    return 0;
+
+  if (!kbuf)
+    return -1;
+
+  if (!user_range_ok(uaddr, len))
+    return -1;
+
+  const uint8_t *src = (const uint8_t *)kbuf;
+  uint64_t remaining = len;
+  uint64_t addr = uaddr;
+
+  while (remaining) {
+    uint64_t *pte = kget_pte_addr_at(cr3, addr);
+
+    if (!pte)
+      return -1;
+
+    uint64_t entry = *pte;
+
+    // Present
+    if (!(entry & 0x01))
+      return -1;
+
+    // User-accessible
+    if (!(entry & 0x04))
+      return -1;
+
+    // Writable
+    if (!(entry & 0x02))
+      return -1;
+
+    uint64_t phys = entry & ~0xFFFULL;
+
+    uint64_t page_offset = addr & 0xFFFULL;
+    uint64_t chunk = 0x1000 - page_offset;
+
+    if (chunk > remaining)
+      chunk = remaining;
+
+    memcpy(
+      (void *)(phys + page_offset),
+      src,
+      (size_t)chunk
+    );
+
+    addr += chunk;
+    src += chunk;
+    remaining -= chunk;
+  }
+
+  return 0;
+}
+
 static void sys_exit(syscall_frame_t *f) {
   if (!current_thread) {
     __asm__ volatile ("cli; hlt");
@@ -438,10 +494,13 @@ void sys_ipc(syscall_frame_t *f) {
     .size = f->rdx
   };
 
-  if (msg.status == IPC_SENT) {
-    kprintinfo("IPC message sent.", 0x0F);
-    kprintinfo(msg.msg, 0x0F);
-  }
+  for (uint64_t i = 0; i < processes_length; i++) {
+    process_t* process = processes[i];
+
+    if (process->pid == msg.target) {
+      copy_to_user_at(process->cr3, USER_AREA_BASE + IPC_USERSPACE_ADDR, msg.msg, msg.size);
+    }
+  }  
 }
 
 void syscall_handler(syscall_frame_t *f) {
