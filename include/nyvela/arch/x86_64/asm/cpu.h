@@ -3,12 +3,28 @@
 
 #include <stdint.h>
 
+static inline uint64_t read_flags() {
+  uint64_t flags;
+  __asm__ volatile ("pushfq; pop %0" : "=r"(flags) :: "memory");
+  return flags;
+}
+
+static inline void write_flags(uint64_t flags) {
+  __asm__ volatile ("push %0; popfq" :: "r"(flags) : "memory", "cc");
+}
+
 static inline void cli(void) {
   __asm__ volatile ("cli" ::: "memory");
 }
 
 static inline void sti(void) {
   __asm__ volatile ("sti" ::: "memory");
+}
+
+static inline uint64_t irq_save() {
+  uint64_t flags = read_flags();
+  cli();
+  return flags;
 }
 
 static inline void hlt(void) {

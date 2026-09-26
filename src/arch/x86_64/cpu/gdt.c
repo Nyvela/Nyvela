@@ -49,8 +49,13 @@ bool ktss_init() {
   gdt.gdtr.limit = 6 * 8 + 16 - 1;
   gdt.gdtr.base = (uint64_t)gdt.gdt;
 
-  tss.ist1 = (uint64_t)kpalloc() + 4096;
-  tss.ist2 = (uint64_t)kpalloc() + 4096;
+  void *ist1 = kpalloc_contiguous(IST_STACK_PAGES);
+  void *ist2 = kpalloc_contiguous(IST_STACK_PAGES);
+
+  if (!ist1 || !ist2) return false;
+
+  tss.ist1 = (uint64_t)ist1 + IST_STACK_PAGES * 4096;
+  tss.ist2 = (uint64_t)ist2 + IST_STACK_PAGES * 4096;
  
   __asm__ volatile ("lgdt %0" :: "m"(gdt.gdtr));
   __asm__ volatile ("ltr %0" :: "r"((uint16_t)0x30));

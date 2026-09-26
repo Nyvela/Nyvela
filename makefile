@@ -16,6 +16,11 @@ STAGE2 := $(BUILD)/stage_2.bin
 KERNEL := $(BUILD)/kernel.bin
 IMAGE := $(BUILD)/os.img
 
+# Derived from the linked kernel so the boot loaders and the image can never
+# disagree about how many sectors the kernel occupies.
+KERNEL_SECTORS = $(shell s=$$(stat -c%s $(KERNEL)); echo $$(( (s + 511) / 512 )))
+KERNEL_LBA := 37
+
 CFLAGS := -ffreestanding -m64 -mno-red-zone \
           -fno-stack-protector -fno-pie \
           -Wall -Wextra \
@@ -59,13 +64,13 @@ $(BOOT): $(BOOT_DIR)/boot.s
 	@mkdir -p $(dir $@)
 	$(AS) -f bin -I$(BOOT_DIR)/ $< -o $@
 
-$(STAGE1): $(BOOT_DIR)/stage_1.s
+$(STAGE1): $(BOOT_DIR)/stage_1.s $(KERNEL)
 	@mkdir -p $(dir $@)
-	$(AS) -f bin -I$(BOOT_DIR)/ $< -o $@
+	$(AS) -f bin -I$(BOOT_DIR)/ -DKERNEL_SECTORS=$(KERNEL_SECTORS) $< -o $@
 
-$(STAGE2): $(BOOT_DIR)/stage_2.s
+$(STAGE2): $(BOOT_DIR)/stage_2.s $(KERNEL)
 	@mkdir -p $(dir $@)
-	$(AS) -f bin -I$(BOOT_DIR)/ $< -o $@
+	$(AS) -f bin -I$(BOOT_DIR)/ -DKERNEL_SECTORS=$(KERNEL_SECTORS) $< -o $@
 
 $(BUILD)/%.o: $(SRC_DIR)/%.c
 	@mkdir -p $(dir $@)
@@ -104,15 +109,8 @@ $(KERNEL): $(KERNEL_OBJ)
 	$(LD) $(LDFLAGS) -o $(BUILD)/kernel.elf $(KERNEL_OBJ)
 	$(OBJCOPY) -O binary $(BUILD)/kernel.elf $@
 
-KERNEL_SECTORS := 97
-KERNEL_LBA := 37
-
 $(IMAGE): $(BOOT) $(STAGE1) $(STAGE2) $(KERNEL)
 	@mkdir -p $(dir $@)
-	@if [ $$(stat -c%s $(KERNEL)) -gt $$(( $(KERNEL_SECTORS) * 512 )) ]; then \
-		echo "error: $(KERNEL) larger than $(KERNEL_SECTORS) sectors; bump KERNEL_SECTORS + stage_1.s/stage_2.s"; \
-		exit 1; \
-	fi
 	cat $(BOOT) $(STAGE1) $(STAGE2) $(KERNEL) > $@
 	@truncate -s $$(( ( $(KERNEL_LBA) + $(KERNEL_SECTORS) ) * 512 )) $@
 

@@ -1,11 +1,7 @@
 #include "../../../../include/nyvela/arch/x86_64/idt.h"
-#include "../../../../include/nyvela/drivers/video/console/console.h"
 #include "../../../../include/nyvela/scheduler/scheduler.h"
-#include "../../../../include/nyvela/arch/x86_64/context.h"
 #include "../../../../include/nyvela/arch/x86_64/apic/apic.h"
-#include "../../../../include/nyvela/arch/x86_64/asm/cpu.h"
 #include "../../../../include/nyvela/arch/x86_64/asm/desc.h"
-#include "../../../../include/nyvela/arch/x86_64/asm/io.h"
 #include "../../../../include/nyvela/arch/x86_64/pic/pic.h"
 #include "../../../../include/nyvela/arch/x86_64/pit/pit.h"
 #include "../../../../include/nyvela/syscall/syscall.h"
@@ -22,16 +18,20 @@ extern void isr_syscall();
 
 idt_entry_t IDT[256] = {0};
 
-void idt_set_gate(int vector, void (*handler)(void)) {
+void idt_set_gate_ist(int vector, void (*handler)(void), uint8_t ist) {
   uint64_t addr = (uint64_t)handler;
 
   IDT[vector].offset_low = addr & 0xFFFF;
   IDT[vector].selector = 0x28;
-  IDT[vector].ist = 0;
+  IDT[vector].ist_flags = (uint8_t)((ist & 7) << 5);
   IDT[vector].type_attr = 0x8E;
   IDT[vector].offset_mid = (addr >> 16) & 0xFFFF;
   IDT[vector].offset_high = (addr >> 32) & 0xFFFFFFFF;
   IDT[vector].zero = 0;
+}
+
+void idt_set_gate(int vector, void (*handler)(void)) {
+  idt_set_gate_ist(vector, handler, 0);
 }
 
 void idt_set_gate_user(int vector, void (*handler)(void)) {
@@ -39,7 +39,7 @@ void idt_set_gate_user(int vector, void (*handler)(void)) {
 
   IDT[vector].offset_low = addr & 0xFFFF;
   IDT[vector].selector = 0x28;
-  IDT[vector].ist = 0;
+  IDT[vector].ist_flags = 0;
   IDT[vector].type_attr = 0xEE;
   IDT[vector].offset_mid = (addr >> 16) & 0xFFFF;
   IDT[vector].offset_high = (addr >> 32) & 0xFFFFFFFF;
@@ -63,8 +63,8 @@ void isr_pit_handler() {
 bool kidt_init() {
   idt_set_gate(0x00, isr_de);
   idt_set_gate(0x06, isr_ud);
-  idt_set_gate(0x08, isr_df);
-  idt_set_gate(0x0E, isr_pf);
+  idt_set_gate_ist(0x08, isr_df, 2);
+  idt_set_gate_ist(0x0E, isr_pf, 1);
   idt_set_gate(0x0D, isr_gp);
   idt_set_gate(0x20, isr_pit);
   idt_set_gate(0x21, isr_kbd);

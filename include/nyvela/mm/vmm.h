@@ -24,6 +24,8 @@ typedef struct vm_area {
 
 bool kvmm_init();
 
+extern uint64_t kernel_cr3;
+
 bool kvmmap_at(uint64_t cr3, uint64_t virt, uint64_t phys, uint64_t flags);
 bool kvmmap(uint64_t virt, uint64_t phys, uint64_t flags);
 

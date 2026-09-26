@@ -183,6 +183,33 @@ static void sys_read(syscall_frame_t *f) {
   f->rax = got;
 }
 
+static void exec_reap(process_t *child) {
+  thread_t *t = child->threads ? child->threads[0] : NULL;
+
+  if (t && t != current_thread) {
+    for (uint64_t i = 0; i < threads_length; i++) {
+      if (threads[i] == t) {
+        for (uint64_t j = i; j + 1 < threads_length; j++) threads[j] = threads[j + 1];
+        threads_length--;
+        break;
+      }
+    }
+
+    free_thread(t);
+    child->threads[0] = NULL;
+  }
+
+  for (uint64_t i = 0; i < processes_length; i++) {
+    if (processes[i] == child) {
+      for (uint64_t j = i; j + 1 < processes_length; j++) processes[j] = processes[j + 1];
+      processes_length--;
+      break;
+    }
+  }
+
+  free_process(child);
+}
+
 static void sys_exec(syscall_frame_t *f) {
   char path[SYSCALL_MAX_PATH + 1];
 
@@ -222,16 +249,8 @@ static void sys_exec(syscall_frame_t *f) {
       for (uint64_t j = 0; j < i; j++) {
         kvmunmap_and_free_at(child->cr3, PROG_BASE + j * 4096);
       }
-      
-      for (uint64_t j = 0; j < threads_length; j++) {
-        if (processes[j] == child) {
-          for (uint64_t k = j; k + 1 < processes_length; k++) processes[k] = processes[k + 1];
-          processes_length--;
-          break;
-        }
-      }
 
-      free_process(child);
+      exec_reap(child);
       sti();
 
       f->rax = (uint64_t)(int64_t)VFS_ERR_NOSPACE;
@@ -252,14 +271,8 @@ static void sys_exec(syscall_frame_t *f) {
     for (uint64_t i = 0; i < pages; i++) {
       kvmunmap_and_free_at(child->cr3, PROG_BASE + i * 4096);
     }
-    for (uint64_t i = 0; i < processes_length; i++) {
-      if (processes[i] == child) {
-        for (uint64_t j = i; j + 1 < processes_length; j++) processes[j] = processes[j + 1];
-        processes_length--;
-        break;
-      }
-    }
-    free_process(child);
+
+    exec_reap(child);
     sti();
 
     f->rax = (uint64_t)read;
@@ -278,19 +291,8 @@ static void sys_exec(syscall_frame_t *f) {
 
   uint64_t code = child->threads[0]->exit_code;
 
-  for (uint64_t i = 0; i < processes_length; i++) {
-    if (processes[i] == child) {
-      for (uint64_t j = i; j + 1 < processes_length; j++) {
-        processes[j] = processes[j + 1];
-      }
+  exec_reap(child);
 
-      processes_length--;
-      break;
-    }
-  }
-
-  free_process(child);
-   
   f->rax = code;
 }
 

@@ -3,7 +3,6 @@ section .data
   UINT64_T_SIZE equ 8
 
 section .bss
-  ctx_ptr resq 1
   rsp_reg resq 1
 
 section .text
@@ -11,18 +10,19 @@ section .text
   global switch_context
   
   extern current_thread
-  extern current_process
+  extern kernel_cr3
 
-; Stack currently looks like this
+; Every interrupt that can preempt a thread arrives with this frame, so
+; save/switch only ever has to understand one layout:
 ; [  ss      ]
 ; [  rsp     ]
 ; [  rflags  ]
 ; [  cs      ]
 ; [  rip     ]
-; [  rsp     ]
+; [   ra     ] <- rsp at save_context entry
 save_context:
   mov [rsp_reg], rsp
-  
+
   ; [rsp_reg + 8] - rip
   ; [rsp_reg + 16] - cs
   ; [rsp_reg + 24] - rflags
@@ -101,8 +101,7 @@ save_context:
     jmp .continue
 
   .ring0:
-    mov rdi, [rsp_reg]
-    add rdi, 32
+    mov rdi, [rdx + 32]
     mov [rax + 56], rdi
     mov qword [rax + 152], 0x10
   
@@ -154,9 +153,22 @@ save_context:
     ret
 
 ; rdi = context_t*
+; Callers must set current_thread to the thread owning this context first;
+; cr3 is taken live from current_thread->process so it can never go stale.
 switch_context:
-  mov rax, [rel current_process]
-  mov rax, [rax]
+  mov rax, [rel current_thread]
+  test rax, rax
+  jz .no_process
+  mov rax, [rax + 32] ; thread_t.process
+  test rax, rax
+  jz .no_process
+  mov rax, [rax] ; process_t.cr3
+  jmp .load_cr3
+
+  .no_process:
+    mov rax, [rel kernel_cr3]
+
+  .load_cr3:
   mov cr3, rax
 
   mov rdx, [rdi + 144]
@@ -170,31 +182,51 @@ switch_context:
     push qword [rdi + 144] ; cs
     push qword [rdi + 128] ; rip
 
-    jmp .continue
+    mov r15, [rdi + 120]
+    mov r14, [rdi + 112]
+    mov r13, [rdi + 104]
 
-  .ring0: 
-    mov rsp, [rdi + 56] ; kernel rsp - valid only for ring0
-    push qword [rdi + 136] ; rflags
-    push qword [rdi + 144] ; cs
-    push qword [rdi + 128] ; rip
-  
-  .continue:
-
-  mov r15, [rdi + 120]
-  mov r14, [rdi + 112]
-  mov r13, [rdi + 104]
-
-  mov r12, [rdi + 96]
-  mov r11, [rdi + 88]
-  mov r10, [rdi + 80]
-  mov r9, [rdi + 72]
-  mov r8, [rdi + 64]
-  mov rbp, [rdi + 48]
-  mov rbx, [rdi + 40]
-  mov rdx, [rdi + 32]
-  mov rcx, [rdi + 24]
-  mov rsi, [rdi + 16] 
-  mov rax, [rdi]
-  mov rdi, [rdi + 8]
+    mov r12, [rdi + 96]
+    mov r11, [rdi + 88]
+    mov r10, [rdi + 80]
+    mov r9, [rdi + 72]
+    mov r8, [rdi + 64]
+    mov rbp, [rdi + 48]
+    mov rbx, [rdi + 40]
+    mov rdx, [rdi + 32]
+    mov rcx, [rdi + 24]
+    mov rsi, [rdi + 16]
+    mov rax, [rdi]
+    mov rdi, [rdi + 8]
 
   iretq
+
+  ; iretq chooses between a 3- and 5-qword pop by comparing the restored CS RPL
+  ; with the current CPL, so a same-privilege return is ambiguous across CPUs and
+  ; emulators. Returning to ring0 never changes privilege, so build no frame:
+  ; retq supplies RIP and popfq supplies RFLAGS. Kernel CS/SS are already loaded.
+  .ring0:
+    mov rsp, [rdi + 56]
+    push qword [rdi + 128] ; return address for the ret below
+
+    mov r15, [rdi + 120]
+    mov r14, [rdi + 112]
+    mov r13, [rdi + 104]
+
+    mov r12, [rdi + 96]
+    mov r11, [rdi + 88]
+    mov r10, [rdi + 80]
+    mov r9, [rdi + 72]
+    mov r8, [rdi + 64]
+    mov rbp, [rdi + 48]
+    mov rbx, [rdi + 40]
+    mov rdx, [rdi + 32]
+    mov rcx, [rdi + 24]
+    mov rsi, [rdi + 16]
+    mov rax, [rdi]
+
+    push qword [rdi + 136] ; rflags is restored as late as possible: only the
+    popfq                  ; reload of rdi and the ret below are left interruptible
+    mov rdi, [rdi + 8]
+
+  ret

@@ -7,8 +7,6 @@
 #include "../../include/nyvela/mm/vmm.h"
 #include "../../include/nyvela/process/process.h"
 
-extern uint8_t* kernel_end;
-
 thread_t **threads;
 thread_t *current_thread;
 
@@ -35,23 +33,11 @@ thread_t* allocate_thread() {
 
   
   void *kernel_stack = NULL;
-  
-  if (KERNEL_STACK_SIZE_IN_PAGES == 1) { 
+
+  if (KERNEL_STACK_SIZE_IN_PAGES == 1) {
     kernel_stack = kpalloc_top();
   } else {
     kernel_stack = kpalloc_contiguous(KERNEL_STACK_SIZE_IN_PAGES);
-    
-    if (kernel_stack && (uint64_t)kernel_stack < 0x600000) {
-      kpfree_contiguous(kernel_stack, KERNEL_STACK_SIZE_IN_PAGES);
-      kernel_stack = NULL;
-      
-      for (uint64_t p = FRAME_COUNT; p-- > (((uint64_t)&kernel_end + 4095) / 4096) + KERNEL_STACK_SIZE_IN_PAGES;) {
-        (void)p; 
-        break;
-      }
-      
-      kernel_stack = kpalloc_contiguous(KERNEL_STACK_SIZE_IN_PAGES);
-    }
   }
 
   if (!kernel_stack) {

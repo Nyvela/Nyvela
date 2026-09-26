@@ -73,6 +73,14 @@ void fault_dump(uint64_t vec, uint64_t err, uint64_t has_err, uint64_t *frame) {
   put_hex64(rsp);
   kprintnl();
 
+  kprints("cr2=", 0x0F);
+  put_hex64(read_cr2());
+  kprintnl();
+
+  kprints("cr3=", 0x0F);
+  put_hex64(read_cr3() & ~0xFFFULL);
+  kprintnl();
+
   kprints("code: ", 0x0F);
   put_bytes((const uint8_t *)rip);
 

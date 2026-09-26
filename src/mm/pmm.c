@@ -16,6 +16,8 @@ bool kpmm_init() {
   uint64_t mmap_entry_count = *MMAP_COUNT;
 
   for (uint64_t i = 0; i < mmap_entry_count; i++) {
+    if (MMAP_ENTRIES[i].type != E820_USABLE) continue;
+
     uint64_t addr = MMAP_ENTRIES[i].base_addr + MMAP_ENTRIES[i].length_in_bytes;
 
     if (addr > end_addr) {
@@ -53,6 +55,8 @@ bool kpmm_init() {
 }
 
 void* kpalloc() {
+  uint64_t flags = irq_save();
+
   const uint64_t first_page = ((uint64_t)&kernel_end + 4095) / 4096;
   const uint64_t last_page = FRAME_COUNT;
 
@@ -63,31 +67,49 @@ void* kpalloc() {
       if (phys >= 0x400000 && phys < 0x600000) continue;
 
       BITMAP[page / 8] &= ~(BITMAP_FREE << (page % 8));
+      
+      write_flags(flags);
       return (void*)phys;
     }
   }
-
+  
+  write_flags(flags);
   return NULL;
 }
 
 void* kpalloc_top(void) {
+  uint64_t flags = irq_save();
+
   const uint64_t first_page = ((uint64_t)&kernel_end + 4095) / 4096;
   
   for (uint64_t page = FRAME_COUNT; page-- > first_page;) {
     if (BITMAP[page / 8] & (BITMAP_FREE << (page % 8))) {
       uint64_t phys = page * 0x1000;
       if (phys >= 0x400000 && phys < 0x600000) continue;
+      
       BITMAP[page / 8] &= ~(BITMAP_FREE << (page % 8));
+      
+      write_flags(flags);
       return (void*)phys;
     }
   }
   
+  write_flags(flags);
   return NULL;
 }
 
 void* kpalloc_contiguous(uint64_t pages) {
-  if (pages == 0) return NULL;
-  if (pages == 1) return kpalloc();
+  uint64_t flags = irq_save();
+
+  if (pages == 0) {
+    write_flags(flags);
+    return NULL;
+  }
+  
+  if (pages == 1) {
+    write_flags(flags);
+    return kpalloc();
+  }
   
   const uint64_t first_page = ((uint64_t)&kernel_end + 4095) / 4096;
   const uint64_t last_page = FRAME_COUNT;
@@ -112,17 +134,23 @@ void* kpalloc_contiguous(uint64_t pages) {
     
     for (uint64_t i = 0; i < pages; i++) {
       BITMAP[(page + i) / 8] &= ~(BITMAP_FREE << ((page + i) % 8));
-    
     }
     
+    write_flags(flags);
     return (void*)(page * 0x1000);
   }
-
+  
+  write_flags(flags);
   return NULL;
 }
 
 void kpfree(void* page) {
-  if (!page) return; 
+  uint64_t flags = irq_save();
+  
+  if (!page) {
+    write_flags(flags);
+    return;
+  } 
   
   uint64_t page_addr = (uint64_t)page;
   
@@ -146,11 +174,21 @@ void kpfree(void* page) {
   }
 
   BITMAP[frame / 8] |= (BITMAP_FREE << (frame % 8));
+
+  write_flags(flags);
 }
 
 void kpfree_contiguous(void* page, uint64_t pages) {
-  if (!page || pages == 0) return;
+  uint64_t flags = irq_save();
+
+  if (!page || pages == 0) {
+    write_flags(flags);
+    return;
+  }
+
   for (uint64_t i = 0; i < pages; i++) {
     kpfree((void*)((uint64_t)page + i*0x1000));
   }
+
+  write_flags(flags);
 }

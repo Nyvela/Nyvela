@@ -1,6 +1,12 @@
 BITS 16
 [org 0x8000]
 
+; The makefile derives this from the linked kernel, so the loader can never be
+; left reading a stale sector count.
+%ifndef KERNEL_SECTORS
+  %error "build with the makefile: it passes -DKERNEL_SECTORS"
+%endif
+
 stage_1:
   cli
 
@@ -457,7 +463,7 @@ DAP_stage_2: ; Disk Address Packet, required for BIOS's INT13h extensions
 DAP_kernel: ; Disk Address Packet, required for BIOS's INT13h extensions
   db 0x10
   db 0x0
-  dw 0x0061 ; 97 sectors to read
+  dw KERNEL_SECTORS ; sectors to read
 
   dw 0x0000
   dw 0x1000 ; load to 0x10000, copy to 0x100000 in long mode

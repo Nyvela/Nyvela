@@ -37,6 +37,12 @@ process_t* spawn_process(void (*entry)(void)) {
     return NULL;
   
   process->cr3 = kvmm_create_user_pml4();
+
+  if (!process->cr3) {
+    kfree(process);
+    return NULL;
+  }
+
   process->pid = current_pid++;
   process->vma = kmalloc(sizeof(vm_area_t));
 
@@ -57,8 +63,18 @@ process_t* spawn_process(void (*entry)(void)) {
     return NULL;
   }
   
+  process_t *saved_process = current_process;
   current_process = process;
   process->threads[0] = spawn_thread(entry);
+  current_process = saved_process;
+
+  if (!process->threads[0]) {
+    kvmm_free_user_pml4(process->cr3);
+    kfree(process->vma);
+    kfree(process->threads);
+    kfree(process);
+    return NULL;
+  }
 
   if (processes_length >= processes_cap) {
     uint64_t new_cap = processes_cap * 2;
@@ -73,6 +89,7 @@ process_t* spawn_process(void (*entry)(void)) {
     }
 
     processes = tmp;
+    processes_cap = new_cap;
   }
 
   processes[processes_length++] = process;

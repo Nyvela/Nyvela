@@ -221,6 +221,13 @@ void kmain() {
   ktest_kmalloc();
   ktest_krealloc();
 
+  if (!ktss_init()) {
+    kprintferr("Failed to initialize TSS.", 0x0F);
+    hang();
+  }
+
+  kprintsucc("Initialized TSS.", 0x0F);
+
   kprintinfo("Initializing IDT (incl. syscall 0x80)...", 0x0F);
   
   if (!kidt_init()) {
@@ -250,13 +257,6 @@ void kmain() {
   kprintsucc("LAPIC timer setup complete.", 0x0F);
 
   kpic_disable();
-  
-  if (!ktss_init()) {
-    kprintferr("Failed to initialize TSS.", 0x0F);
-    hang();
-  }
-
-  kprintsucc("Initialized TSS.", 0x0F);
 
   kbd_init();
 

@@ -1,6 +1,12 @@
 BITS 32
 [org 0x8800]
 
+; The makefile derives this from the linked kernel, so the loader can never be
+; left reading a stale sector count.
+%ifndef KERNEL_SECTORS
+  %error "build with the makefile: it passes -DKERNEL_SECTORS"
+%endif
+
 stage_2:
   cli
  
@@ -173,7 +179,7 @@ updated_pml4: db "Updated PML4 table.", 0
 entering_long_mode: db "Entering long mode...", 0
 entered_long_mode: db "Entered long mode.", 0
 
-KERNEL_SIZE_IN_SECTORS equ 97
+KERNEL_SIZE_IN_SECTORS equ KERNEL_SECTORS
 
 times ((0x1000 - (($ - $$ + 0x8800) % 0x1000)) % 0x1000) db 0
 pml4_table:

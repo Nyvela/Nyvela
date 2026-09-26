@@ -4,8 +4,12 @@
 #include "../../include/nyvela/arch/x86_64/asm/cpu.h"
 #include "../../include/nyvela/lib/utils.h"
 
+uint64_t kernel_cr3 = 0;
+
 bool kvmm_init() {
   uint64_t cr3 = read_cr3();
+
+  kernel_cr3 = cr3 & ~0xFFFULL;
 
   uint64_t pml4_phys = cr3 & ~0xFFFULL;
   uint64_t *pml4 = (uint64_t*)pml4_phys;
@@ -40,6 +44,8 @@ bool kvmm_init() {
 }
 
 uint64_t* kget_pte_addr_at(uint64_t cr3, uint64_t virt) {
+  uint64_t flags = irq_save();
+
   uint64_t pml4_index = (virt >> 39) & 0x1FFULL;
   uint64_t pdpt_index = (virt >> 30) & 0x1FFULL;
   uint64_t pd_index = (virt >> 21) & 0x1FFULL;
@@ -54,6 +60,7 @@ uint64_t* kget_pte_addr_at(uint64_t cr3, uint64_t virt) {
   uint64_t *pdpt;
 
   if (!(pml4e & 1)) {
+    write_flags(flags);
     return 0;
   } else {
     pdpt_phys = pml4e & ~0xFFFULL;
@@ -66,6 +73,7 @@ uint64_t* kget_pte_addr_at(uint64_t cr3, uint64_t virt) {
   uint64_t *pd;
 
   if (!(pdpte & 1)) {
+    write_flags(flags);
     return 0;
   } else {
     pd_phys = pdpte & ~0xFFFULL;
@@ -77,11 +85,13 @@ uint64_t* kget_pte_addr_at(uint64_t cr3, uint64_t virt) {
   uint64_t pt_phys;
   
   if (!(pde & 1)) {
+    write_flags(flags);
     return 0;
   } else {
     pt_phys = pde & ~0xFFFULL;
   }
-
+  
+  write_flags(flags);
   return &((uint64_t*)(pt_phys & ~0xFFFULL))[pt_index];
 }
 
@@ -99,9 +109,11 @@ uint64_t kget_phys_page_addr(uint64_t virt) {
 }
 
 bool kvmunmap_and_free_at(uint64_t cr3, uint64_t virt) {
+  uint64_t flags = irq_save();
   uint64_t *pte = kget_pte_addr_at(cr3, virt);
 
   if (!pte) {
+    write_flags(flags);
     return false;
   }
 
@@ -111,6 +123,7 @@ bool kvmunmap_and_free_at(uint64_t cr3, uint64_t virt) {
   *pte = 0;
 
   if ((cr3 & ~0xFFFULL) == (read_cr3() & ~0xFFFULL)) invlpg(virt);
+  write_flags(flags);
   return true;
 }
 
@@ -119,13 +132,18 @@ bool kvmunmap_and_free(uint64_t virt) {
 }
 
 bool kvmunmap_at(uint64_t cr3, uint64_t virt) {
+  uint64_t flags = irq_save();
   uint64_t *pte = kget_pte_addr_at(cr3, virt);
 
-  if (!pte || !(*pte & 1)) return false;
+  if (!pte || !(*pte & 1)) {
+    write_flags(flags);
+    return false;
+  }
 
   *pte = 0;
 
   if ((cr3 & ~0xFFFULL) == (read_cr3() & ~0xFFFULL)) invlpg(virt);
+  write_flags(flags);
   return true;
 }
 
@@ -134,6 +152,8 @@ bool kvmunmap(uint64_t virt) {
 }
 
 bool kvmmap_at(uint64_t cr3, uint64_t virt, uint64_t phys, uint64_t flags) {
+  uint64_t _flags = irq_save();
+
   uint64_t pml4_index = (virt >> 39) & 0x1FFULL;
   uint64_t pdpt_index = (virt >> 30) & 0x1FFULL;
   uint64_t pd_index = (virt >> 21) & 0x1FFULL;
@@ -231,21 +251,30 @@ bool kvmmap_at(uint64_t cr3, uint64_t virt, uint64_t phys, uint64_t flags) {
 
   pt[pt_index] = (phys & ~0xFFFULL) | flags;
   if ((cr3 & ~0xFFFULL) == (read_cr3() & ~0xFFFULL)) invlpg(virt);
+  
+  write_flags(_flags);
   return true;
 }
 
 bool kvmmap(uint64_t virt, uint64_t phys, uint64_t flags) { 
+  uint64_t _flags = irq_save();
+
   uint64_t cr3 = read_cr3();
   kvmmap_at(cr3, virt, phys, flags);
   write_cr3(cr3); // flush
-
+  
+  write_flags(_flags);
   return true;
 }
 
 uint64_t kvmm_create_user_pml4(void) {
+  uint64_t flags = irq_save();
   uint64_t new_pml4_phys = (uint64_t)kpalloc();
 
-  if (!new_pml4_phys) return 0;
+  if (!new_pml4_phys) {
+    write_flags(flags);
+    return 0;
+  }
 
   uint64_t old_cr3 = read_cr3();
   uint64_t *old_pml4 = (uint64_t*)(old_cr3 & ~0xFFFULL);
@@ -261,6 +290,7 @@ uint64_t kvmm_create_user_pml4(void) {
   
   if (!new_pdpt_phys) {
     kpfree((void*)new_pml4_phys);
+    write_flags(flags);
     return 0;
   }
 
@@ -274,6 +304,7 @@ uint64_t kvmm_create_user_pml4(void) {
   if (!new_pd_phys) {
     kpfree((void*)new_pml4_phys);
     kpfree((void*)new_pdpt_phys);
+    write_flags(flags);
     return 0;
   }
   
@@ -300,6 +331,7 @@ uint64_t kvmm_create_user_pml4(void) {
       kpfree((void*)new_pml4_phys);
       kpfree((void*)new_pdpt_phys);
       kpfree((void*)new_pd_phys);
+      write_flags(flags);
       return 0;
     }
     
@@ -330,6 +362,7 @@ uint64_t kvmm_create_user_pml4(void) {
           kpfree((void*)new_pd_phys);
           kpfree((void*)new_pt2_phys);
           
+          write_flags(flags);
           return 0;
         }
 
@@ -361,6 +394,7 @@ uint64_t kvmm_create_user_pml4(void) {
       kpfree((void*)new_pdpt_phys);
       kpfree((void*)new_pd_phys);
       kpfree((void*)new_pt2_phys);
+      write_flags(flags);
       return 0;
     }
 
@@ -397,6 +431,7 @@ uint64_t kvmm_create_user_pml4(void) {
           kpfree((void*)new_pt2_phys);
           kpfree((void*)new_pt3_phys);
           
+          write_flags(flags);
           return 0;
         }
           
@@ -415,16 +450,29 @@ uint64_t kvmm_create_user_pml4(void) {
   new_pml4[0] = (new_pdpt_phys & ~0xFFF) | 0x03 | (old_pml4[0] & 0x04);
   new_pdpt[0] = (new_pd_phys & ~0xFFF) | 0x03 | (old_pdpt[0] & 0x04);
   
+  write_flags(flags);
   return new_pml4_phys;
 }
 
 void kvmm_free_user_pml4(uint64_t pml4_phys) {
-  if (!pml4_phys || (pml4_phys & ~0xFFFULL) == (read_cr3() & ~0xFFFULL)) return;
+  uint64_t flags = irq_save();
+
+  if (!pml4_phys) { 
+    write_flags(flags);
+    return;
+  }
+
+  if ((pml4_phys & ~0xFFFULL) == (read_cr3() & ~0xFFFULL)) {
+    kprintferr("kvmm_free_user_pml4: refusing to free active cr3 (leaked).", 0x0F);
+    write_flags(flags);
+    return;
+  }
   
   uint64_t pml4e = *(uint64_t*)pml4_phys;
 
   if (!(pml4e & 0x01)) {
     kpfree((void*)pml4_phys);
+    write_flags(flags);
     return;
   }
 
@@ -434,6 +482,7 @@ void kvmm_free_user_pml4(uint64_t pml4_phys) {
   if (!(pdpte & 0x01)) {
     kpfree(pdpt);
     kpfree((void*)pml4_phys);
+    write_flags(flags);
     return;
   }
 
@@ -478,6 +527,7 @@ void kvmm_free_user_pml4(uint64_t pml4_phys) {
   kpfree(pd);
   kpfree(pdpt);
   kpfree((void*)pml4_phys);
+  write_flags(flags);
 }
 
 bool is_shared_user_page(uint64_t virt) {

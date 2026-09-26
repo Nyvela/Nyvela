@@ -12,6 +12,8 @@
 #define GDT_KCODE_LM_SEGMENT 0x28
 #define GDT_TSS_SEGMENT 0x30
 
+#define IST_STACK_PAGES 2
+
 typedef struct tss_t {
   uint32_t reserved0;
 

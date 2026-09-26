@@ -1,6 +1,8 @@
 #ifndef NYVPROCESS_H
 #define NYVPROCESS_H
 
+#include <stddef.h>
+
 #include "../mm/vmm.h"
 
 typedef struct thread_t thread_t;
@@ -12,6 +14,8 @@ typedef struct process_t {
   vm_area_t *vma;
   thread_t **threads;
 } process_t;
+
+_Static_assert(offsetof(process_t, cr3) == 0, "cr3 offset (read by switch_context)");
 
 extern process_t **processes;
 extern uint64_t processes_length;

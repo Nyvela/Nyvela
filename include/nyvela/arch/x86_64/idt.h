@@ -9,7 +9,7 @@
 typedef struct __attribute__((packed)) idt_entry_t {
   uint16_t offset_low;
   uint16_t selector;
-  uint8_t  ist;
+  uint8_t  ist_flags; // bits 0-4 reserved (zero), bits 5-7 IST index
   uint8_t  type_attr;
   uint16_t offset_mid;
   uint32_t offset_high;
@@ -28,6 +28,7 @@ extern idt_entry_t IDT[];
 
 bool kidt_init();
 void idt_set_gate(int vector, void (*handler)(void));
+void idt_set_gate_ist(int vector, void (*handler)(void), uint8_t ist);
 void idt_set_gate_user(int vector, void (*handler)(void));
 
 void isr_lapic_timer_handler();
