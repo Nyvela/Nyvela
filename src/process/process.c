@@ -65,7 +65,7 @@ process_t* spawn_process(void (*entry)(void)) {
   
   process_t *saved_process = current_process;
   current_process = process;
-  process->threads[0] = spawn_thread(entry);
+  process->threads[0] = spawn_thread(entry, process->cr3);
   current_process = saved_process;
 
   if (!process->threads[0]) {

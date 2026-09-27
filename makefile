@@ -41,12 +41,15 @@ USER_SHELL_ELF := $(USER_BUILD)/shell.elf
 USER_SHELL_BIN := $(USER_BUILD)/shell.bin
 USER_HELLO_ELF := $(USER_BUILD)/hello.elf
 USER_HELLO_BIN := $(USER_BUILD)/hello.bin
+USER_INIT_ELF := $(USER_BUILD)/init.elf
+USER_INIT_BIN := $(USER_BUILD)/init.bin
 
 ASFLAGS := -f elf64
 LDFLAGS := -T linker.ld
 
 KERNEL_C_SRC := $(shell find $(SRC_DIR) -type f -name '*.c' \
-                   ! -path '$(SRC_DIR)/user/*')
+                   ! -path '$(SRC_DIR)/user/*' \
+                   ! -path '$(SRC_DIR)/init/*')
 
 KERNEL_ASM_SRC := $(shell find $(SRC_DIR) -type f -name '*.s' \
                    ! -path '$(BOOT_DIR)/*')
@@ -101,8 +104,16 @@ $(USER_HELLO_ELF): $(SRC_DIR)/user/hello/hello.c include/nyvela/user/syslib.h $(
 $(USER_HELLO_BIN): $(USER_HELLO_ELF)
 	$(OBJCOPY) -O binary $< $@
 
+$(USER_INIT_ELF): $(SRC_DIR)/init/main.c include/nyvela/user/syslib.h $(SRC_DIR)/user/ld/init.ld
+	@mkdir -p $(dir $@)
+	$(CC) $(USER_CFLAGS) -T $(SRC_DIR)/user/ld/init.ld $(USER_LDFLAGS) $< -o $@
+
+$(USER_INIT_BIN): $(USER_INIT_ELF)
+	$(OBJCOPY) -O binary $< $@
+
 $(BUILD)/user/blobs/shell_blob.o: $(USER_SHELL_BIN)
 $(BUILD)/user/blobs/hello_blob.o: $(USER_HELLO_BIN)
+$(BUILD)/user/blobs/init_blob.o: $(USER_INIT_BIN)
 
 $(KERNEL): $(KERNEL_OBJ)
 	@mkdir -p $(dir $@)

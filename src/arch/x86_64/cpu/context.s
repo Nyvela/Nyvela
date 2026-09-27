@@ -1,5 +1,5 @@
 section .data
-  CONTEXT_T_SIZE equ 160
+  CONTEXT_T_SIZE equ 168
   UINT64_T_SIZE equ 8
 
 section .bss
@@ -153,23 +153,24 @@ save_context:
     ret
 
 ; rdi = context_t*
-; Callers must set current_thread to the thread owning this context first;
-; cr3 is taken live from current_thread->process so it can never go stale.
 switch_context:
   mov rax, [rel current_thread]
   test rax, rax
-  jz .no_process
-  mov rax, [rax + 32] ; thread_t.process
+  jz .no_cr3
+
+  mov rax, [rax + 8] ; thread_t.context_t
   test rax, rax
-  jz .no_process
-  mov rax, [rax] ; process_t.cr3
+  
+  jz .no_cr3
+
+  mov rax, [rax + 160] ; context_t.cr3
   jmp .load_cr3
 
-  .no_process:
+  .no_cr3:
     mov rax, [rel kernel_cr3]
 
   .load_cr3:
-  mov cr3, rax
+    mov cr3, rax
 
   mov rdx, [rdi + 144]
   and rdx, 3

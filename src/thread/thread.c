@@ -60,7 +60,7 @@ thread_t* allocate_thread() {
   thread->context = context;
   thread->kernel_stack = kernel_stack;
   thread->process = current_process;
-
+  
   return thread;
 }
 
@@ -78,7 +78,7 @@ void free_thread(thread_t* thread) {
   kfree(thread);
 }
 
-thread_t* spawn_thread(void (*entry)(void)) {
+thread_t* spawn_thread(void (*entry)(void), uint64_t cr3) {
   if (!entry) return NULL;
 
   thread_t* thread = allocate_thread();
@@ -90,6 +90,8 @@ thread_t* spawn_thread(void (*entry)(void)) {
   thread->context->cs = GDT_KCODE_LM_SEGMENT;
   thread->context->ss = GDT_KDATA_SEGMENT;
 
+  thread->context->cr3 = cr3;
+  
   thread->tid = next_thread_id++;
   thread->state = THREAD_READY;
   thread->exit_code = 0;

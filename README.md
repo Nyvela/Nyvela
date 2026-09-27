@@ -64,7 +64,7 @@ Kernel execution (`src/kernel/kernel.c:kmain`):
 3. Run `ktest_palloc`, `ktest_vmmap`, `ktest_kmalloc`, `ktest_krealloc`
 4. `kidt_init` (incl. syscall gate `0x80` DPL3 + keyboard `0x21`), `kpic_init`, `kpit_set_freq(1000)`, `kenable_lapic`, `ksetup_lapic_timer`, `kpic_disable` (PIT was only needed to calibrate the LAPIC)
 5. `ktss_init`, `kbd_init` (drains 8042, unmasks IRQ1), `vfs_init` (ramfs at `/`), `syscall_init`
-6. Run `ktest_vfs`, `ktest_syscall` (yield + bad-fd via `int $0x80` from ring0), publish embedded binaries (`kload_user_bins`: `/bin/hello`, `/readme.txt`)
+6. Run `ktest_vfs`, `ktest_syscall` (yield + bad-fd via `int $0x80` from ring0), publish embedded binaries (`kload_user_bins`: `/bin/sh`, `/bin/hello`, `/bin/init`, `/readme.txt`)
 7. Spawn ring0 idle thread (`hlt` loop), clone user PML4, map shell reservation (`0x400000`, 4 `U/S` pages, zeroed, blob copied) + shell stack (`0x44F000`), map program slot (`0x500000`, 16 zeroed `U/S` pages) + program stack (`0x5FF000`), spawn shell thread with `cs=0x1B/ss=0x23`, set `TSS.rsp0` to its kernel stack, `switch_context` to ring3 (never returns; preemption continues via LAPIC timer interrupt `0x30` at ~1 kHz)
 
 ## Syscalls (`int $0x80`)
@@ -89,7 +89,8 @@ User pointers must lie in `0x400000-0x700000` and be `NUL`-terminated within 256
 
 * Address space: `vmm_create_user_pml4()` clones the kernel PML4 once at boot; shell, programs, and idle share it. `kvmmap` with flags `0x07` maps user pages and sets `U/S` on the path tables.
 * Layout (`U/S` pages): shell image `0x400000-0x404000` (4-page reservation, blob copied over zeroed pages so `.bss` works), shell stack `0x44F000-0x450000`; program slot `0x500000-0x510000` (16 zeroed pages), program stack `0x5FF000-0x600000`.
-* Flat binaries: user programs are freestanding (`-nostdlib`, syscalls only), linked for a fixed base (`src/user/ld/shell.ld` -> `0x400000`, `src/user/ld/prog.ld` -> `0x500000`, `_start` first via `-ffunction-sections`), converted with `objcopy -O binary`, embedded into the kernel via `incbin` blobs (`src/user/blobs/`), and at boot copied to their linked addresses (`shell`) or published as ramfs files (`/bin/hello`). The shell itself is Rust (`src/user/shell/`, `no_std`, cargo `x86_64-unknown-none` target); `hello` is C — both toolchains are supported, see `makefile` USER rules.
+* Flat binaries: user programs are freestanding (`-nostdlib`, syscalls only), linked for a fixed base (`src/user/ld/shell.ld` -> `0x400000`, `src/user/ld/init.ld` -> `0x400000`, `src/user/ld/prog.ld` -> `0x500000`, `_start` first via `-ffunction-sections`), converted with `objcopy -O binary`, embedded into the kernel via `incbin` blobs (`src/user/blobs/`), and at boot published as ramfs files (`/bin/sh`, `/bin/hello`, `/bin/init`) and then loaded to their linked addresses. The shell itself is Rust (`src/user/shell/`, `no_std`, cargo `x86_64-unknown-none` target); `hello` and `init` are C — both toolchains are supported, see `makefile` USER rules.
+* The init process (`src/init/main.c`, user program, not kernel code) is spawned with entry `USER_CODE_VIRT` and its image loaded from `/bin/init` via `exec_load`; it is excluded from `KERNEL_C_SRC` in the `makefile`.
 * Limits (v1): single shared address space (no isolation between shell and programs), one foreground program at a time, no CLI arguments, no thread reaping (`DEAD` exec threads linger, skipped by the scheduler).
 
 ## Shell

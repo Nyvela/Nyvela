@@ -22,6 +22,8 @@ extern uint8_t shell_blob_start[];
 extern uint8_t shell_blob_end[];
 extern uint8_t hello_blob_start[];
 extern uint8_t hello_blob_end[];
+extern uint8_t init_blob_start[];
+extern uint8_t init_blob_end[];
 
 void krnl() {
   for (;;) {
@@ -69,6 +71,23 @@ static void kload_user_bins(void) {
     hang();
   }
 
+  uint64_t init_size = (uint64_t)(init_blob_end - init_blob_start);
+
+  if (init_size == 0 || init_size > VFS_MAX_FILE_SIZE) {
+    kprintferr("Bad init blob size.", 0x0F);
+    hang();
+  }
+
+  if (vfs_create("/bin/init", false) != VFS_OK) {
+    kprintferr("Failed to create /bin/init.", 0x0F);
+    hang();
+  }
+
+  if (vfs_write("/bin/init", init_blob_start, init_size, 0) != (int64_t)init_size) {
+    kprintferr("Failed to write /bin/init.", 0x0F);
+    hang();
+  }
+
   static const char readme[] =
     "Welcome to Nyvela!\n"
     "Try: help, ls, ls /bin, cat /readme.txt, run hello\n";
@@ -94,32 +113,32 @@ void kuserspace_init() {
     hang();
   }
 
-  process_t *user = spawn_process((void (*)(void))USER_CODE_VIRT);
+  process_t *init = spawn_process((void (*)(void))USER_CODE_VIRT);
 
-  if (!user) {
-    kprintferr("Failed to spawn shell process.", 0x0F);
+  if (!init) {
+    kprintferr("Failed to spawn init process.", 0x0F);
     __asm__ volatile ("cli\nhlt");
   }
 
-  for (uint64_t i = 0; i < SHELL_PAGES; i++) {
+  for (uint64_t i = 0; i < NYVD_PAGES; i++) {
     uint64_t phys = (uint64_t)kpalloc();
 
     if (!phys) {
-      kprintferr("Failed to allocate memory for shell.", 0x0F);
+      kprintferr("Failed to allocate memory for init process.", 0x0F);
       hang();
     }
 
-    if (!kvmmap_at(user->cr3, USER_CODE_VIRT + i * 4096, phys, 0x07)) {
+    if (!kvmmap_at(init->cr3, USER_CODE_VIRT + i * 4096, phys, 0x07)) {
       kprintferr("Failed to map shell.", 0x0F);
       hang();
     }
   }
   
   uint64_t old_cr3 = read_cr3();
-  write_cr3(user->cr3);
+  write_cr3(init->cr3);
 
-  if (exec_load("/bin/sh", USER_CODE_VIRT, SHELL_MAX) < 0) {
-    kprintferr("Failed to load /bin/sh.", 0x0F);
+  if (exec_load("/bin/init", USER_CODE_VIRT, NYVD_MAX) < 0) {
+    kprintferr("Failed to load /bin/init.", 0x0F);
     hang();
   }
 
@@ -128,12 +147,12 @@ void kuserspace_init() {
   uint64_t stack_phys = (uint64_t)kpalloc();
 
   if (!stack_phys) {
-    kprintferr("Failed to allocate stack for shell.", 0x0F);
+    kprintferr("Failed to allocate stack for init process.", 0x0F);
     hang();
   }
 
-  if (!kvmmap_at(user->cr3, USER_STACK_PAGE, stack_phys, 0x07)) {
-    kprintferr("Failed to map shell stack.", 0x0F);
+  if (!kvmmap_at(init->cr3, USER_STACK_PAGE, stack_phys, 0x07)) {
+    kprintferr("Failed to map init process stack.", 0x0F);
     __asm__ volatile ("cli\nhlt");
   }
 
@@ -147,7 +166,7 @@ void kuserspace_init() {
       hang();
     }
 
-    if (!kvmmap_at(user->cr3, PROG_BASE + i * 4096, phys, 0x07)) {
+    if (!kvmmap_at(init->cr3, PROG_BASE + i * 4096, phys, 0x07)) {
       kprintferr("Failed to map program slot.", 0x0F);
       hang();
     }
@@ -162,7 +181,7 @@ void kuserspace_init() {
     hang();
   }
 
-  if (!kvmmap_at(user->cr3, PROG_STACK_PAGE, prog_stack, 0x07)) {
+  if (!kvmmap_at(init->cr3, PROG_STACK_PAGE, prog_stack, 0x07)) {
     kprintferr("Failed to map program stack.", 0x0F);
     hang();
   }
@@ -171,13 +190,13 @@ void kuserspace_init() {
 
   kprintinfo("Switching to ring3 shell (/bin/sh)...", 0x0F);
 
-  user->threads[0]->context->cs = 0x18 | 3;
-  user->threads[0]->context->ss = 0x20 | 3;
-  user->threads[0]->context->rsp = USER_STACK_TOP;
+  init->threads[0]->context->cs = 0x18 | 3;
+  init->threads[0]->context->ss = 0x20 | 3;
+  init->threads[0]->context->rsp = USER_STACK_TOP;
 
-  current_thread = user->threads[0];
-  tss.rsp0 = ((uint64_t)user->threads[0]->kernel_stack + 4096 * KERNEL_STACK_SIZE_IN_PAGES);
-  switch_context(user->threads[0]->context);
+  current_thread = init->threads[0];
+  tss.rsp0 = ((uint64_t)init->threads[0]->kernel_stack + 4096 * KERNEL_STACK_SIZE_IN_PAGES);
+  switch_context(init->threads[0]->context);
 }
 
 __attribute__((section(".text.entry")))

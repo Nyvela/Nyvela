@@ -531,7 +531,7 @@ void kvmm_free_user_pml4(uint64_t pml4_phys) {
 }
 
 bool is_shared_user_page(uint64_t virt) {
-  if (virt >= USER_CODE_VIRT && virt < USER_CODE_VIRT + SHELL_MAX)
+  if (virt >= USER_CODE_VIRT && virt < USER_CODE_VIRT + NYVD_MAX)
     return true;
 
   if (virt >= USER_STACK_PAGE && virt < USER_STACK_TOP)

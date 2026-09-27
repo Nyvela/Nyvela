@@ -5,17 +5,26 @@
 #include <stddef.h>
 #include <stdbool.h>
 
-#define SYS_EXIT      0ULL
-#define SYS_WRITE     1ULL
-#define SYS_YIELD     2ULL
-#define SYS_READ      3ULL
+#define SYS_EXIT 0ULL
+#define SYS_WRITE 1ULL
+#define SYS_YIELD 2ULL
+#define SYS_READ 3ULL
 
 #define SYS_FS_CREATE 10ULL
-#define SYS_FS_WRITE  11ULL
-#define SYS_FS_READ   12ULL
-#define SYS_FS_LIST   13ULL
+#define SYS_FS_WRITE 11ULL
+#define SYS_FS_READ 12ULL
+#define SYS_FS_LIST 13ULL
 
-#define SYS_EXEC      20ULL
+#define SYS_EXEC 20ULL
+#define SYS_CREATE_THREAD 21ULL
+#define SYS_FREE_THREAD 22ULL
+
+#define SYS_AS_CREATE 30ULL
+#define SYS_AS_MAP 31ULL
+
+#define SYS_ALLOC_PAGE 40ULL
+#define SYS_FREE_PAGE 41ULL
+#define SYS_MMAP 42ULL
 
 static inline uint64_t sys_call(uint64_t nr, uint64_t a1, uint64_t a2,
                                 uint64_t a3, uint64_t a4) {

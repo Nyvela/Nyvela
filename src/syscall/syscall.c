@@ -13,6 +13,7 @@
 #include "../../include/nyvela/ipc/ipc.h"
 #include "../../include/nyvela/arch/x86_64/asm/cpu.h"
 #include "../../include/nyvela/mm/pmm.h"
+#include "../../include/nyvela/as/as.h"
 
 extern void switch_context(context_t *context);
 
@@ -500,7 +501,75 @@ void sys_ipc(syscall_frame_t *f) {
     if (process->pid == msg.target) {
       copy_to_user_at(process->cr3, USER_AREA_BASE + IPC_USERSPACE_ADDR, msg.msg, msg.size);
     }
-  }  
+  }
+}
+
+void sys_as_create(syscall_frame_t* f) {
+  addrspace_t *as = kaddrspace_create();
+  f->rax = as->id;
+}
+
+void sys_as_map(syscall_frame_t* f) {
+  addrspace_t *as = NULL;
+
+  for (uint64_t i = 0; i < addrspaces_length; i++) {
+    if (addrspaces[i]->id == f->rdi) {
+      as = addrspaces[i];
+      break;
+    }
+  }
+
+  if (!as || as->cr3 == current_process->cr3) {
+    f->rax = 0;
+    return;
+  }
+
+  f->rax = kvmmap_at(as->cr3, f->rsi, f->rdx, f->r10);
+}
+
+void sys_create_thread(syscall_frame_t* f) {
+  addrspace_t *as = NULL;
+
+  for (uint64_t i = 0; i < addrspaces_length; i++) {
+    if (addrspaces[i]->id == f->rsi) {
+      as = addrspaces[i];
+      break;
+    }
+  }
+
+  if (!as) {
+    f->rax = 0;
+    return;
+  }
+
+  thread_t *t = spawn_thread((void (*)(void))f->rdi, as->cr3);
+
+  t->context->cs = 0x18 | 3;
+  t->context->ss = 0x20 | 3;
+  t->context->rsp = f->rdx;
+
+  f->rax = t->tid;
+}
+
+void sys_alloc_page(syscall_frame_t* f) {
+  void *page = kpalloc();
+
+  if (!page) {
+    f->rax = 0;
+    return;
+  }
+
+  f->rax = (uint64_t)page;
+}
+
+void sys_mmap(syscall_frame_t* f) {
+  f->rax = kvmmap_at(current_thread->context->cr3, f->rdi, f->rsi, f->rdx);
+}
+
+void sys_free_thread(syscall_frame_t* f) {
+}
+
+void sys_free_page(syscall_frame_t* f) {
 }
 
 void syscall_handler(syscall_frame_t *f) {
@@ -549,6 +618,34 @@ void syscall_handler(syscall_frame_t *f) {
 
     case SYS_CLEAR:
       kclear();
+      break;
+
+    case SYS_AS_CREATE:
+      sys_as_create(f);
+      break;
+
+    case SYS_AS_MAP:
+      sys_as_map(f);
+      break;
+    
+    case SYS_CREATE_THREAD:
+      sys_create_thread(f);
+      break;
+
+    case SYS_FREE_THREAD:
+      sys_free_thread(f);
+      break;
+
+    case SYS_ALLOC_PAGE:
+      sys_alloc_page(f);
+      break;
+
+    case SYS_FREE_PAGE:
+      sys_free_page(f);
+      break;
+  
+    case SYS_MMAP:
+      sys_mmap(f);
       break;
 
     default:
