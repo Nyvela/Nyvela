@@ -14,6 +14,7 @@
 #define SYS_FS_WRITE 11ULL
 #define SYS_FS_READ 12ULL
 #define SYS_FS_LIST 13ULL
+#define SYS_FS_SIZE 14ULL
 
 #define SYS_EXEC 20ULL
 #define SYS_CREATE_THREAD 21ULL
@@ -21,10 +22,13 @@
 
 #define SYS_AS_CREATE 30ULL
 #define SYS_AS_MAP 31ULL
+#define SYS_AS_FREE 32ULL
 
 #define SYS_ALLOC_PAGE 40ULL
 #define SYS_FREE_PAGE 41ULL
 #define SYS_MMAP 42ULL
+#define SYS_UNMMAP 43ULL
+#define SYS_UNMMAP_AND_FREE 44ULL
 
 static inline uint64_t sys_call(uint64_t nr, uint64_t a1, uint64_t a2,
                                 uint64_t a3, uint64_t a4) {
@@ -150,6 +154,123 @@ static inline size_t uitoa(int64_t val, char *buf, size_t cap) {
   buf[pos] = '\0';
 
   return pos;
+}
+
+typedef struct block_t {
+  uint64_t size;
+  bool is_used;
+  struct block_t* next;
+} block_t;
+
+block_t* CURRENT_BLOCK;
+
+bool malloc_init() {
+  void* page = (void*)sys_call(SYS_ALLOC_PAGE, 0, 0, 0, 0);
+  if (!page) return false;
+
+  CURRENT_BLOCK = (block_t*)page;
+  
+  *CURRENT_BLOCK = (block_t){
+    .size = 4096 - sizeof(block_t),
+    .is_used = false,
+    .next = NULL
+  };
+
+  return true;
+}
+
+void* malloc(uint64_t size) {
+  if (size == 0 || size >= (4096 - sizeof(block_t))) {
+    return NULL;
+  }
+
+  uint64_t aligned_size = (size + 15) & ~15ULL;
+  
+  for (block_t *block = CURRENT_BLOCK; block; block = block->next) {
+    if (!block->is_used) {
+      if (block->size < aligned_size) {
+        void* page = (void*)sys_call(SYS_ALLOC_PAGE, 0, 0, 0, 0);
+
+        if (!page) {
+          return NULL;
+        }
+        
+        block_t *new_block = (block_t*)page;
+        
+        *new_block = (block_t){
+          .size = 4096 - sizeof(block_t),
+          .is_used = true,
+          .next = block->next
+        };
+
+        block->next = new_block;
+        return (void*)((uint8_t*)new_block + sizeof(block_t));
+      }
+
+      if (block->size < aligned_size + sizeof(block_t) + 16) {
+        block->is_used = true;
+        return (void*)((uint8_t*)block + sizeof(block_t));
+      }
+      
+      block_t* new_block = (block_t*)((uint8_t*)block + aligned_size + sizeof(block_t));
+
+      *new_block = (block_t){
+        .size = block->size - sizeof(block_t) - aligned_size,
+        .is_used = false,
+        .next = block->next
+      };
+
+      block->size = aligned_size;
+      block->next = new_block;
+      block->is_used = true;
+
+      return (void*)((uint8_t*)block + sizeof(block_t));
+    }
+  }
+
+  return NULL;
+}
+
+void free(void *ptr) {
+  if (!ptr) return;
+
+  block_t* block = (block_t*)((uint8_t*)ptr - sizeof(block_t));
+  block->is_used = false;
+}
+
+void* realloc(void* ptr, uint64_t new_size) {
+  if (!ptr) {
+    return malloc(new_size);
+  }
+
+  if (new_size == 0) {
+    free(ptr);
+    return NULL;
+  }
+
+  if (new_size >= (4096 - sizeof(block_t))) {
+    return NULL;
+  }
+
+  block_t* old_block = (block_t*)((uint8_t*)ptr - sizeof(block_t));
+  uint64_t old_size = old_block->size;
+
+  uint64_t aligned_new = (new_size + 15) & ~15ULL;
+
+  if (aligned_new <= old_size) {
+    return ptr;
+  }
+
+  void* new_ptr = malloc(new_size);
+
+  if (!new_ptr) {
+    return NULL;
+  }
+
+  umemcpy(new_ptr, ptr, old_size);
+  free(ptr);
+
+  return new_ptr;
 }
 
 #endif // NYV_SYSLIB_H

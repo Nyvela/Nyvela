@@ -120,6 +120,15 @@ static int copy_to_user_at(uint64_t cr3, uint64_t uaddr, const void *kbuf, uint6
   return 0;
 }
 
+static uint64_t user_find_free_page(uint64_t cr3) {
+  for (uint64_t virt = USER_HEAP_BASE; virt < USER_AREA_END; virt += 4096) {
+    uint64_t *pte = kget_pte_addr_at(cr3, virt);
+    if (!pte || !(*pte & 0x01) || !(*pte & 0x04)) return virt;
+  }
+
+  return 0;
+}
+
 static void sys_exit(syscall_frame_t *f) {
   if (!current_thread) {
     __asm__ volatile ("cli; hlt");
@@ -147,6 +156,17 @@ static void sys_exit(syscall_frame_t *f) {
   switch_context(next->context);
 
   for (;;) __asm__ volatile ("hlt");
+}
+
+static void sys_fs_size(syscall_frame_t *f) {
+  char path[SYSCALL_MAX_PATH + 1];
+
+  if (copy_user_path(f->rdi, path) != 0) {
+    f->rax = (uint64_t)(int64_t)VFS_ERR_BADPATH;
+    return;
+  }
+
+  f->rax = (uint64_t)(int64_t)vfs_size(path);
 }
 
 static void sys_write(syscall_frame_t *f) {
@@ -524,7 +544,10 @@ void sys_as_map(syscall_frame_t* f) {
     return;
   }
 
-  f->rax = kvmmap_at(as->cr3, f->rsi, f->rdx, f->r10);
+  uint64_t phys = kget_phys_page_addr_at(current_thread->context->cr3, f->rdx);
+  if (!phys) { f->rax = 0; return; }
+
+  f->rax = kvmmap_at(as->cr3, f->rsi, phys, f->r10);
 }
 
 void sys_create_thread(syscall_frame_t* f) {
@@ -552,6 +575,7 @@ void sys_create_thread(syscall_frame_t* f) {
 }
 
 void sys_alloc_page(syscall_frame_t* f) {
+  uint64_t virt = user_find_free_page(current_thread->context->cr3);
   void *page = kpalloc();
 
   if (!page) {
@@ -559,7 +583,13 @@ void sys_alloc_page(syscall_frame_t* f) {
     return;
   }
 
-  f->rax = (uint64_t)page;
+  if (!kvmmap_at(current_thread->context->cr3, virt, (uint64_t)page, 0x07)) {
+    kpfree(page);
+    f->rax = 0;
+    return;
+  }
+
+  f->rax = virt;
 }
 
 void sys_mmap(syscall_frame_t* f) {
@@ -567,9 +597,43 @@ void sys_mmap(syscall_frame_t* f) {
 }
 
 void sys_free_thread(syscall_frame_t* f) {
+  if (!f->rdi) return;
+
+  free_thread((thread_t*)f->rdi);
 }
 
 void sys_free_page(syscall_frame_t* f) {
+  if (!f->rdi) return;
+  
+  kvmunmap_and_free_at(current_thread->context->cr3, f->rdi);
+}
+
+void sys_as_free(syscall_frame_t* f) {
+  if (!f->rdi) return;
+
+  addrspace_t *as = NULL;
+
+  for (uint64_t i = 0; i < addrspaces_length; i++) {
+    if (addrspaces[i]->id == f->rdi) {
+      as = addrspaces[i];
+      break;
+    }
+  }
+
+  if (!as) return;
+  kvmm_free_user_pml4(as->cr3);
+}
+
+void sys_unmmap(syscall_frame_t *f) {
+  if (!f->rdi) return;
+
+  kvmunmap_at(current_process->cr3, f->rdi);
+}
+
+void sys_unmmap_and_free(syscall_frame_t *f) {
+  if (!f->rdi) return;
+
+  kvmunmap_and_free_at(current_process->cr3, f->rdi);
 }
 
 void syscall_handler(syscall_frame_t *f) {
@@ -612,6 +676,10 @@ void syscall_handler(syscall_frame_t *f) {
       sys_fs_list(f);
       break;
 
+    case SYS_FS_SIZE:
+      sys_fs_size(f);
+      break;
+
     case SYS_EXEC:
       sys_exec(f);
       break;
@@ -626,6 +694,10 @@ void syscall_handler(syscall_frame_t *f) {
 
     case SYS_AS_MAP:
       sys_as_map(f);
+      break;
+
+    case SYS_AS_FREE:
+      sys_as_free(f);
       break;
     
     case SYS_CREATE_THREAD:
@@ -646,6 +718,14 @@ void syscall_handler(syscall_frame_t *f) {
   
     case SYS_MMAP:
       sys_mmap(f);
+      break;
+
+    case SYS_UNMMAP:
+      sys_unmmap(f);
+      break;
+
+    case SYS_UNMMAP_AND_FREE:
+      sys_unmmap_and_free(f);
       break;
 
     default:
