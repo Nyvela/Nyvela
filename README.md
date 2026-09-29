@@ -258,7 +258,7 @@ Boot image layout: `boot` (1 sector) + `stage_1` (4 sectors) + `stage_2` (32 sec
 ### Userspace
 
 * [x] Minimal userspace support and privilege separation (ring3 shell + foreground programs, `U/S` pages, syscalls; single shared address space, no ELF loader yet)
-* [ ] Standard library
+* [x] Standard library
 * [x] Shell and basic utilities (`help/ls/cat/echo/run/clear/exit`; no pipes/jobs/args yet)
 * [x] Filesystem support (minimal VFS + ramfs at `/`; no persistent/block-device FS yet)
 
