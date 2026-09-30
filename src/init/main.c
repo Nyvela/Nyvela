@@ -6,6 +6,7 @@
 #define SPAWN_MAX_PAGES  8ULL
 
 uint64_t next_pid = 1;
+static uproc_table_t uprocess_table = {0};
 
 static bool load_program(const char *path, uint64_t *stage, uint64_t size) {
   for (uint64_t pos = 0; pos < size; pos += SPAWN_READ_CHUNK) {
@@ -46,6 +47,21 @@ uprocess_t *spawn_process(const char *path) {
   if (!proc) {
     return NULL;
   }
+
+  if (uprocess_table.size >= uprocess_table.cap) {
+    uint64_t new_cap = uprocess_table.cap * 2;
+    void *tmp = realloc(uprocess_table.processes, sizeof(uprocess_t*) * new_cap);
+
+    if (!tmp) {
+      free(proc);
+      return NULL;
+    }
+
+    uprocess_table.processes = tmp;
+    uprocess_table.cap = new_cap;
+  } 
+
+  uprocess_table.processes[uprocess_table.size++] = proc;
 
   uint64_t stage[SPAWN_MAX_PAGES];
   uint64_t staged = 0;
@@ -115,7 +131,8 @@ cleanup:
   if (as) {
     sys_call(SYS_AS_FREE, as, 0, 0, 0);
   }
-
+  
+  uprocess_table.processes[uprocess_table.size - 1] = NULL;
   free(proc);
 
   return NULL;
@@ -124,12 +141,22 @@ cleanup:
 void _start(void) {
   malloc_init();
 
+  uprocess_table.size = 0;
+  uprocess_table.cap = 4;
+  uprocess_table.processes = malloc(sizeof(uprocess_t) * 4);
+
+  if (!uprocess_table.processes) {
+    char buf[] = "Failed to initialize process table.";
+    sys_call(SYS_WRITE, 1, (uint64_t)buf, sizeof(buf), 0);
+    for (;;) { __asm__ volatile ("pause"); };
+  }
+
   if (!spawn_process("/bin/sh")) {
     char buf[] = "Failed to startup /bin/sh.";
     sys_call(SYS_WRITE, 1, (uint64_t)buf, sizeof(buf), 0);
   }
 
-  for (;;);
+  for (;;) { __asm__ volatile ("pause"); };
 
   sys_exit(0);
 }
