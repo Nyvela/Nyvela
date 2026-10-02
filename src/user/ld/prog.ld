@@ -1,4 +1,3 @@
-/* Flat user binary linked for PROG_BASE (0x500000). See shell.ld. */
 ENTRY(_start)
 
 SECTIONS

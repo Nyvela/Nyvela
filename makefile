@@ -1,3 +1,23 @@
+include nyvela.conf
+
+ifndef INIT_DIR
+$(error INIT_DIR is not configured. (see nyvela.conf))
+endif
+
+ifeq ($(wildcard $(INIT_DIR)/.),)
+$(error init directory $(INIT_DIR) does not exist. (see nyvela.conf))
+endif
+
+ifndef INIT_BIN_NAME
+$(error INIT_BIN_NAME is not configured. (see nyvela.conf))
+endif
+
+ifndef INIT_BUILD_COMMAND
+$(error INIT_BUILD_COMMAND is not configured. (see nyvela.conf))
+endif
+ 
+INIT_BIN := $(INIT_DIR)/build/$(INIT_BIN_NAME).bin
+
 CC := gcc
 AS := nasm
 LD := ld
@@ -41,15 +61,15 @@ USER_SHELL_ELF := $(USER_BUILD)/shell.elf
 USER_SHELL_BIN := $(USER_BUILD)/shell.bin
 USER_HELLO_ELF := $(USER_BUILD)/hello.elf
 USER_HELLO_BIN := $(USER_BUILD)/hello.bin
-USER_INIT_ELF := $(USER_BUILD)/init.elf
-USER_INIT_BIN := $(USER_BUILD)/init.bin
+
+INIT_BLOB_S := $(SRC_DIR)/user/blobs/init_blob.s
+INIT_BLOB_O := $(BUILD)/user/blobs/init_blob.o
 
 ASFLAGS := -f elf64
 LDFLAGS := -T linker.ld
 
 KERNEL_C_SRC := $(shell find $(SRC_DIR) -type f -name '*.c' \
-                   ! -path '$(SRC_DIR)/user/*' \
-                   ! -path '$(SRC_DIR)/init/*')
+                   ! -path '$(SRC_DIR)/user/*')
 
 KERNEL_ASM_SRC := $(shell find $(SRC_DIR) -type f -name '*.s' \
                    ! -path '$(BOOT_DIR)/*')
@@ -59,9 +79,12 @@ ASM_OBJ := $(patsubst $(SRC_DIR)/%.s,$(BUILD)/%.o,$(KERNEL_ASM_SRC))
 
 KERNEL_OBJ := $(C_OBJ) $(ASM_OBJ)
 
-.PHONY: all clean run debug
+.PHONY: all clean run debug build-init
 
 all: $(IMAGE)
+
+$(INIT_BIN): nyvela.conf
+	$(INIT_BUILD_COMMAND)
 
 $(BOOT): $(BOOT_DIR)/boot.s
 	@mkdir -p $(dir $@)
@@ -75,7 +98,7 @@ $(STAGE2): $(BOOT_DIR)/stage_2.s $(KERNEL)
 	@mkdir -p $(dir $@)
 	$(AS) -f bin -I$(BOOT_DIR)/ -DKERNEL_SECTORS=$(KERNEL_SECTORS) $< -o $@
 
-$(BUILD)/%.o: $(SRC_DIR)/%.c
+$(BUILD)/%.o: $(SRC_DIR)/%.c $(INIT_BIN)
 	@mkdir -p $(dir $@)
 	$(CC) $(CFLAGS) -c $< -o $@
 
@@ -104,16 +127,12 @@ $(USER_HELLO_ELF): $(SRC_DIR)/user/hello/hello.c include/nyvela/user/syslib.h $(
 $(USER_HELLO_BIN): $(USER_HELLO_ELF)
 	$(OBJCOPY) -O binary $< $@
 
-$(USER_INIT_ELF): $(SRC_DIR)/init/main.c include/nyvela/user/syslib.h $(SRC_DIR)/user/ld/init.ld
-	@mkdir -p $(dir $@)
-	$(CC) $(USER_CFLAGS) -T $(SRC_DIR)/user/ld/init.ld $(USER_LDFLAGS) $< -o $@
-
-$(USER_INIT_BIN): $(USER_INIT_ELF)
-	$(OBJCOPY) -O binary $< $@
-
 $(BUILD)/user/blobs/shell_blob.o: $(USER_SHELL_BIN)
 $(BUILD)/user/blobs/hello_blob.o: $(USER_HELLO_BIN)
-$(BUILD)/user/blobs/init_blob.o: $(USER_INIT_BIN)
+
+$(INIT_BLOB_O): $(INIT_BLOB_S) $(INIT_BIN)
+	@mkdir -p $(dir $@)
+	$(AS) $(ASFLAGS) -DINIT_BIN=\"$(abspath $(INIT_BIN))\" $< -o $@
 
 $(KERNEL): $(KERNEL_OBJ)
 	@mkdir -p $(dir $@)

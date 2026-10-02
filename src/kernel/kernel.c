@@ -22,8 +22,8 @@ extern uint8_t shell_blob_start[];
 extern uint8_t shell_blob_end[];
 extern uint8_t hello_blob_start[];
 extern uint8_t hello_blob_end[];
-extern uint8_t init_blob_start[];
-extern uint8_t init_blob_end[];
+
+extern uint8_t init_blob_end[], init_blob_start[];
 
 void krnl() {
   for (;;) {
@@ -120,7 +120,9 @@ void kuserspace_init() {
     __asm__ volatile ("cli\nhlt");
   }
 
-  for (uint64_t i = 0; i < NYVD_PAGES; i++) {
+  uint64_t code_page_count = (init_blob_end - init_blob_start + 4095) / 4096;
+
+  for (uint64_t i = 0; i < code_page_count; i++) {
     uint64_t phys = (uint64_t)kpalloc();
 
     if (!phys) {
@@ -137,7 +139,7 @@ void kuserspace_init() {
   uint64_t old_cr3 = read_cr3();
   write_cr3(init->cr3);
 
-  if (exec_load("/bin/init", USER_CODE_VIRT, NYVD_MAX) < 0) {
+  if (exec_load("/bin/init", USER_CODE_VIRT, code_page_count * 4096) < 0) {
     kprintferr("Failed to load /bin/init.", 0x0F);
     hang();
   }

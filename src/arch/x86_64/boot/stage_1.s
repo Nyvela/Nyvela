@@ -1,10 +1,8 @@
 BITS 16
 [org 0x8000]
 
-; The makefile derives this from the linked kernel, so the loader can never be
-; left reading a stale sector count.
 %ifndef KERNEL_SECTORS
-  %error "build with the makefile: it passes -DKERNEL_SECTORS"
+  %error "build with the makefile, it passes -DKERNEL_SECTORS"
 %endif
 
 stage_1:
@@ -41,14 +39,52 @@ stage_1:
   mov si, kernel_load_msg
   mov ah, 0x0F
   call printinfo
-
-  mov ah, 0x42 ; Read from disk
-  mov si, DAP_kernel
-  mov dl, [0x7B00]
-
-  int 0x13
-  jc kernel_disk_error
   
+  ; BIOS rejects reads more than 128 sectors
+  mov si, DAP_kernel
+  mov word [kernel_remaining], KERNEL_SECTORS
+  mov dword [kernel_dest], KERNEL_LOAD_ADDR
+
+  .kernel_load_loop:
+    mov eax, [kernel_dest]
+    mov [si + 4], ax ; destination offset
+    shr eax, 4 ; linear address is segment * 16 + offset
+    mov [si + 6], ax ; destination segment
+
+    mov cx, [kernel_remaining]
+    cmp cx, KERNEL_MAX_TRANSFER
+    jbe .kernel_load_size
+
+    mov cx, KERNEL_MAX_TRANSFER
+
+  .kernel_load_size:
+    mov word [si + 2], cx
+
+    push si
+    push cx
+
+    mov ah, 0x42 ; Read from disk
+    mov dl, [0x7B00] ; load boot drive number
+
+    int 0x13
+
+    pop cx
+    pop si
+    jc kernel_disk_error
+
+    ; Advance past the chunk that was just transferred
+    sub word [kernel_remaining], cx
+
+    movzx eax, cx
+    shl eax, 9 ; sectors to bytes
+    add dword [kernel_dest], eax
+
+    movzx eax, cx
+    add dword [si + 8], eax ; source LBA
+
+    cmp word [kernel_remaining], 0
+    jne .kernel_load_loop
+
   mov si, kernel_succ_msg
   mov ah, 0x0F
   call printsucc
@@ -468,5 +504,11 @@ DAP_kernel: ; Disk Address Packet, required for BIOS's INT13h extensions
   dw 0x0000
   dw 0x1000 ; load to 0x10000, copy to 0x100000 in long mode
   dq 0x25
+
+KERNEL_MAX_TRANSFER equ 128 ; 64 KiB, the largest extended read the BIOS takes
+KERNEL_LOAD_ADDR equ 0x10000 ; load here, stage_2 copies it to 0x100000
+
+kernel_remaining: dw KERNEL_SECTORS ; sectors of the kernel not read yet
+kernel_dest: dd KERNEL_LOAD_ADDR ; linear destination of the next chunk
 
 times 4 * 512 - ($ - $$) db 0 ; pad to 4 sectors

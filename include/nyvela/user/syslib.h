@@ -30,6 +30,20 @@
 #define SYS_UNMMAP 43ULL
 #define SYS_UNMMAP_AND_FREE 44ULL
 
+#define USER_CODE_VIRT 0x400000ULL
+#define USER_STACK_TOP 0x450000ULL
+#define USER_STACK_PAGE (USER_STACK_TOP - 0x1000ULL)
+#define USER_HEAP_BASE 0x410000ULL
+
+#define NYVD_PAGES 4ULL
+#define NYVD_MAX (NYVD_PAGES * 4096ULL)
+
+#define PROG_BASE 0x500000ULL
+#define PROG_PAGES 16ULL
+#define PROG_MAX (PROG_PAGES * 4096ULL)
+#define PROG_STACK_TOP 0x600000ULL
+#define PROG_STACK_PAGE (PROG_STACK_TOP - 0x1000ULL)
+
 static inline uint64_t sys_call(uint64_t nr, uint64_t a1, uint64_t a2,
                                 uint64_t a3, uint64_t a4) {
   register uint64_t r10 __asm__("r10") = a4;

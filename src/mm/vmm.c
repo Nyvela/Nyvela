@@ -530,8 +530,12 @@ void kvmm_free_user_pml4(uint64_t pml4_phys) {
   write_flags(flags);
 }
 
+extern uint8_t init_blob_start[], init_blob_end[];
+
 bool is_shared_user_page(uint64_t virt) {
-  if (virt >= USER_CODE_VIRT && virt < USER_CODE_VIRT + NYVD_MAX)
+  uint64_t code_page_count = (init_blob_end - init_blob_start + 4095) / 4096;
+
+  if (virt >= USER_CODE_VIRT && virt < USER_CODE_VIRT + code_page_count)
     return true;
 
   if (virt >= USER_STACK_PAGE && virt < USER_STACK_TOP)
