@@ -6,6 +6,7 @@
 
 #include "../arch/x86_64/context.h"
 #include "../process/process.h"
+#include "../ipc/ipc.h"
 
 #define KERNEL_STACK_SIZE_IN_PAGES 2
 
@@ -24,6 +25,7 @@ typedef struct thread_t {
 
   thread_state_t state;
   process_t* process; 
+  ipc_queue_t* queue;
 
   int64_t exit_code;
 } thread_t;
@@ -33,9 +35,10 @@ _Static_assert(offsetof(thread_t, context) == 8, "context offset");
 _Static_assert(offsetof(thread_t, kernel_stack) == 16, "kernel_stack offset");
 _Static_assert(offsetof(thread_t, state) == 24, "state offset");
 _Static_assert(offsetof(thread_t, process) == 32, "process offset");
-_Static_assert(offsetof(thread_t, exit_code) == 40, "exit_code offset");
+_Static_assert(offsetof(thread_t, queue) == 40, "queue offset");
+_Static_assert(offsetof(thread_t, exit_code) == 48, "exit_code offset");
 
-_Static_assert(sizeof(thread_t) == 48, "thread_t has unexpected size");
+_Static_assert(sizeof(thread_t) == 56, "thread_t has unexpected size");
 
 extern thread_t **threads;
 extern thread_t *current_thread;

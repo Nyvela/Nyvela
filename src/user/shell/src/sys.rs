@@ -5,7 +5,8 @@ pub const SYS_WRITE: u64 = 1;
 pub const SYS_YIELD: u64 = 2;
 pub const SYS_READ: u64 = 3;
 pub const SYS_CLEAR: u64 = 4;
-pub const SYS_IPC: u64 = 5;
+pub const SYS_IPC_SEND: u64 = 5;
+pub const SYS_IPC_POLL: u64 = 6;
 
 pub const SYS_FS_CREATE: u64 = 10;
 pub const SYS_FS_WRITE: u64 = 11;
@@ -38,8 +39,13 @@ pub fn sys_exit(code: i64) -> ! {
 }
 
 #[inline(always)]
-pub fn sys_ipc(target: u16, msg: *const u8, size: u64) -> i64 {
-    unsafe { trap(SYS_IPC, target as u64, msg as u64, size, 0) as i64 }
+pub fn sys_ipc_send(target: u16, msg: *const u8, size: u64) -> i64 {
+    unsafe { trap(SYS_IPC_SEND, target as u64, msg as u64, size, 0) as i64 }
+}
+
+#[inline(always)]
+pub fn sys_ipc_poll(buf: *mut u8, len: u64) -> i64 {
+    unsafe { trap(SYS_IPC_POLL, buf as u64, len as u64, 0, 0) as i64 }
 }
 
 #[inline(always)]

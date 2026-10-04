@@ -3,21 +3,19 @@
 
 #include <stdint.h>
 
-#define IPC_USERSPACE_ADDR 0x1F0
-
-typedef enum ipc_status_t {
-  IPC_SENT,
-  IPC_UNREAD,
-  IPC_RECEIVED,
-} ipc_status_t;
-
-typedef struct ipc_msg_t {
-  ipc_status_t status;
-  uint16_t target;
+typedef struct ipc_msg {
+  uint64_t target;
+  uint64_t sender;
   uint8_t* msg;
   uint64_t size;
 } ipc_msg_t;
 
-void ipc_send(uint16_t target, uint8_t* msg, uint64_t size);
+typedef struct ipc_queue {
+  ipc_msg_t* queue;
+  uint64_t capacity, head, tail, count;
+} ipc_queue_t;
+
+bool kipc_send(uint64_t target, uint8_t* msg, uint64_t size);
+bool kipc_poll(ipc_msg_t* msg);
 
 #endif // NYVIPC_H

@@ -56,11 +56,33 @@ thread_t* allocate_thread() {
   memset(context, 0, sizeof(context_t));
 
   context->rsp = (uint64_t)kernel_stack + 4096 * KERNEL_STACK_SIZE_IN_PAGES;
+  
+  thread->queue = kmalloc(sizeof(ipc_queue_t));
+  
+  if (!thread->queue) {
+    kfree(thread);
+    kfree(context);
+    kpfree_contiguous(kernel_stack, KERNEL_STACK_SIZE_IN_PAGES);
+    return NULL;
+  }
+
+  memset(thread->queue, 0, sizeof(ipc_queue_t));
+
+  thread->queue->capacity = 4;
+  thread->queue->queue = kmalloc(sizeof(ipc_msg_t) * 4);
+
+  if (!thread->queue->queue) {
+    kfree(thread->queue);
+    kfree(thread);
+    kfree(context);
+    kpfree_contiguous(kernel_stack, KERNEL_STACK_SIZE_IN_PAGES);
+    return NULL;
+  }
 
   thread->context = context;
   thread->kernel_stack = kernel_stack;
   thread->process = current_process;
-  
+
   return thread;
 }
 

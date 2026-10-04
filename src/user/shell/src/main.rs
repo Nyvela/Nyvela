@@ -5,6 +5,13 @@ mod sys;
 
 use sys::*;
 
+struct IpcMsg {
+    target: u64,
+    msg: *mut u8,
+    size: u64,
+    sender: u64,
+}
+
 #[panic_handler]
 fn panic(_info: &core::panic::PanicInfo) -> ! {
     sys_write(1, b"panic\n");
@@ -339,12 +346,18 @@ fn run_line(
         cmd_clear();
     } else if eq_span(line, &argv[0], b"exit") {
         sys_exit(0);
-    } else if eq_span(line, &argv[0], b"ipc-test") {
-        let hello = b"hello\0";
-        sys_ipc(1, hello.as_ptr(), hello.len() as u64);
+    } else if eq_span(line, &argv[0], b"self-ipc-test") {
+        let hello = b"hello\n";
+        sys_ipc_send(3, hello.as_ptr(), hello.len() as u64);
     } else if eq_span(line, &argv[0], b"ipc-poll") {
-        let msg: *const u8 = 0x4001F0 as *const u8;
-        sys_write(1, unsafe { core::slice::from_raw_parts(msg, 5) });
+        let mut buf = [0u8; 256];
+        let size = sys_ipc_poll(buf.as_mut_ptr(), buf.len() as u64);
+
+        write_str(if size == 0 {
+            b"No messages!\n"
+        } else {
+            &buf[..(size as usize)]
+        });
     } else {
         write_str(b"unknown command: ");
         write_str(&line[argv[0].0..argv[0].0 + argv[0].1]);

@@ -31,7 +31,8 @@ failure.
 | 2 | `yield` | - | no-op, returns 0 (preemption is timer-driven) |
 | 3 | `read` | `fd` (0), `buf`, `len` | blocking keyboard read; waits with `sti/hlt` until at least one byte |
 | 4 | `clear` | - | clears the console |
-| 5 | `ipc` | `target_pid`, `buf`, `size` | copies into `USER_AREA_BASE + 0x1F0` of matching target processes (stub) |
+| 5 | `ipc_send` | `target_pid`, `buf`, `size` | queues IPC message to matching target process |
+| 6 | `ipc_poll` | `buf`, `size` | copies `uint8_t*` from IPC message to `buf`, returns amount of bytes written. 0 indicates failure |
 | 10 | `fs_create` | `path`, `is_dir=rsi` | `vfs_create` |
 | 11 | `fs_write` | `path`, `buf`, `len`, `offset=r10` | `vfs_write` |
 | 12 | `fs_read` | `path`, `buf`, `len`, `offset=r10` | `vfs_read` |

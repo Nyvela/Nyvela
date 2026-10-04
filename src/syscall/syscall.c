@@ -507,21 +507,29 @@ static void sys_fs_list(syscall_frame_t *f) {
   f->rax = (uint64_t)r;
 }
 
-void sys_ipc(syscall_frame_t *f) {
-  ipc_msg_t msg = (ipc_msg_t){
-    .status = IPC_SENT,
-    .msg = (uint8_t *)f->rsi,
-    .target = (uint16_t)f->rdi,
-    .size = f->rdx
-  };
+void sys_ipc_send(syscall_frame_t *f) {
+  f->rax = kipc_send(f->rdi, (uint8_t*)f->rsi, f->rdx);
+}
 
-  for (uint64_t i = 0; i < processes_length; i++) {
-    process_t* process = processes[i];
+void sys_ipc_poll(syscall_frame_t *f) {
+  uint64_t uaddr = f->rdi;
+  uint64_t capacity = f->rsi;
 
-    if (process->pid == msg.target) {
-      copy_to_user_at(process->cr3, USER_AREA_BASE + IPC_USERSPACE_ADDR, msg.msg, msg.size);
-    }
+  ipc_msg_t msg;
+
+  if (!kipc_poll(&msg)) {
+    f->rax = false;
+    return;
   }
+
+  if (msg.size > capacity || copy_to_user_at(current_thread->context->cr3, uaddr, msg.msg, msg.size) != 0) {
+    kfree(msg.msg);
+    f->rax = 0;
+    return;
+  }
+  
+  kfree(msg.msg);
+  f->rax = msg.size;
 }
 
 void sys_as_create(syscall_frame_t* f) {
@@ -656,8 +664,12 @@ void syscall_handler(syscall_frame_t *f) {
       sys_read(f);
       break;
 
-    case SYS_IPC:
-      sys_ipc(f);
+    case SYS_IPC_SEND:
+      sys_ipc_send(f);
+      break;
+
+    case SYS_IPC_POLL:
+      sys_ipc_poll(f);
       break;
 
     case SYS_FS_CREATE:
