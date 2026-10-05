@@ -6,13 +6,11 @@ misunderstanding.
 
 ## Getting set up
 
-You need `gcc`, `nasm`, `ld`, `objcopy`, `make`, `qemu-system-x86_64`, and
-`cargo` with the `x86_64-unknown-none` target (for the Rust shell). See
-[docs/build.md](docs/build.md).
+You need `gcc`, `nasm`, `ld`, `objcopy`, `make`, and `qemu-system-x86_64`.
 
 `make` will not run without a `nyvela.conf`. Nyvela is kernel-only, so the
-config points at a userspace init program outside the tree that acts
-as the test harness:
+config points at the two userspace programs it boots into, both outside the
+tree:
 
 Example config:
 
@@ -20,6 +18,10 @@ Example config:
 INIT_DIR = ../Nyvd
 INIT_BIN_NAME = nyvd
 INIT_BUILD_COMMAND = USER_CFLAGS="-I$(CURDIR)/include" make -C $(INIT_DIR)
+
+SHELL_DIR = ../nyvsh
+SHELL_BIN_NAME = shell
+SHELL_BUILD_COMMAND = make -C $(SHELL_DIR)
 ```
 
 Then `make && make run`. You should reach a `Nyvela >` prompt.
@@ -32,8 +34,9 @@ Then `make && make run`. You should reach a `Nyvela >` prompt.
   reformatting out of feature commits - it makes the diff reviewable.
 - **Match the surrounding style.** Indentation, naming, comment density. No
   reformatting unrelated lines in a patch.
-- **Don't add dependencies.** Everything is freestanding C, NASM, and one Rust
-  crate-less `no_std` crate.
+- **Don't add dependencies.** The kernel is freestanding C and NASM. User
+  programs are freestanding C too, or a `no_std` Rust crate in their own
+  project. No libc, no host headers, no runtime.
 
 ## Commit messages
 
@@ -73,14 +76,12 @@ image at its link base and enters at that same address. That only holds if the
 custom linker script is actually applied with `-T`. Without it, `ld` page-aligns
 the sections and emits GNU notes first, so offset 0 is a note and the program
 faults two bytes into what looks like a prologue. If you touch a linker script
-or a user program's build flags, `xxd -l 16` the `.bin` and check. The
-rationale is written next to `-T linker.ld` in the init project too, so it does
-not get "cleaned up".
+or a user program's build flags, `xxd -l 16` the `.bin` and check.
 
 **No red zone, anywhere.** `switch_context` pushes the `iretq` frame below the
 saved user RSP, so red-zone locals are clobbered across a context switch. C
 needs `-mno-red-zone` (it is in `USER_CFLAGS`), Rust needs `-C no-redzone=yes`
-(it is in the cargo `RUSTFLAGS`). Please do not remove either.
+(it is in the shell project's cargo `RUSTFLAGS`). Please do not remove either.
 
 **Faults are log-and-halt.** There is no recovery and no IST yet, so a ring3
 fault stops the machine. That is expected behaviour right now, not a new bug -

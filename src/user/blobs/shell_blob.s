@@ -4,5 +4,5 @@ global shell_blob_start
 global shell_blob_end
 
 shell_blob_start:
-incbin "build/user/shell.bin"
+incbin SHELL_BIN
 shell_blob_end:

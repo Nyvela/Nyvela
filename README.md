@@ -16,20 +16,19 @@ Working:
 - PMM (bitmap), VMM (4-level paging), kernel heap
 - processes with per-process address spaces, round-robin scheduler, ring0/ring3
   context switches
-- `int $0x80` syscalls: console, ramfs, exec, threads, address spaces, pages
-- a ring3 shell and a userspace init that spawns it (Currently working on detaching shell from kernel)
+- `int $0x80` syscalls: console, ramfs, exec, threads, address spaces, pages, IPC
+- a userspace init that spawns a separate ring3 shell
 
 Work-In-Progress: fault handlers log and halt rather than recovering, there's no IST,
-no SMP, no persistent filesystem, no ELF loader, and IPC is a stub.
+no SMP, no persistent filesystem, no ELF loader.
 
 ## Quick start
 
-You need `gcc`, `nasm`, `ld`, `objcopy`, `make`, `qemu-system-x86_64`, and
-`cargo` with the `x86_64-unknown-none` target for the Rust shell.
+You need `gcc`, `nasm`, `ld`, `objcopy`, `make`, and `qemu-system-x86_64`.
 
-One bit of setup first. This repo is kernel-only, but a kernel still needs
-something to boot into, so `make` expects a `nyvela.conf` pointing at 
-userspace init program to test it against. It will not run without one.
+One bit of setup first. This repo is kernel-only, so `make` expects a
+`nyvela.conf` pointing at the two userspace programs it boots into: an init
+program and a shell. It will not run without one.
 
 Example config:
 
@@ -38,6 +37,10 @@ Example config:
 INIT_DIR = ../Nyvd
 INIT_BIN_NAME = nyvd
 INIT_BUILD_COMMAND = USER_CFLAGS="-I$(CURDIR)/include" make -C $(INIT_DIR)
+
+SHELL_DIR = ../nyvsh
+SHELL_BIN_NAME = shell
+SHELL_BUILD_COMMAND = make -C $(SHELL_DIR)
 ```
 
 Then:
@@ -79,7 +82,7 @@ src/fs/             vfs.c, ramfs.c
 src/exec/           flat binary loader
 src/as/             address spaces
 src/ipc/            inter-process messages
-src/user/           hello/, ld/, blobs/, shell/ (Rust)
+src/user/           hello/, ld/ (prog.ld), blobs/
 docs/               the actual documentation
 ```
 
@@ -126,7 +129,7 @@ The `docs/` directory has the detail:
 - [x] Shell (`help` / `ls` / `cat` / `echo` / `run` / `clear` / `exit`)
 - [x] VFS + ramfs
 - [x] Detach the init program fully from the kernel
-- [ ] IPC: receive side, and move the scratch address off the target's code page
+- [x] IPC: receive side, and move the scratch address off the target's code page
 - [ ] Process reaping, and ownership-checked user pointers
 - [ ] ELF loader, so user programs stop needing a flat binary at a fixed base
 - [ ] Persistent filesystem

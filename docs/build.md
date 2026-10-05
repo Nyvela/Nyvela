@@ -5,7 +5,6 @@
 * `gcc` with x86-64 support and freestanding flags
 * `nasm`
 * `ld`, `objcopy`
-* `cargo` + `rustc` with the `x86_64-unknown-none` target (for the Rust shell)
 * `make`
 * `qemu-system-x86_64`
 
@@ -13,15 +12,19 @@ Tested on Linux with GCC 13+ and QEMU 8+.
 
 ## nyvela.conf
 
-Nyvela is kernel-only. There is no userspace init program in the tree, but a
-kernel needs something to boot into in order to be exercised, so `make` reads
-`nyvela.conf` from the repo root and stops immediately if it is missing or
-incomplete. Example config:
+Nyvela is kernel-only. Neither the init program nor the shell is in this tree,
+but the kernel needs something to boot into in order to be exercised, so `make`
+reads `nyvela.conf` from the repo root and stops immediately if it is missing or
+incomplete. Six keys, in two groups:
 
 ```make
 INIT_DIR = ../Nyvd
 INIT_BIN_NAME = nyvd
 INIT_BUILD_COMMAND = USER_CFLAGS="-I$(CURDIR)/include" make -C $(INIT_DIR)
+
+SHELL_DIR = ../nyvsh
+SHELL_BIN_NAME = shell
+SHELL_BUILD_COMMAND = make -C $(SHELL_DIR)
 ```
 
 | key | meaning |
@@ -29,16 +32,19 @@ INIT_BUILD_COMMAND = USER_CFLAGS="-I$(CURDIR)/include" make -C $(INIT_DIR)
 | `INIT_DIR` | directory of the init project - must exist, `make` errors out otherwise |
 | `INIT_BIN_NAME` | base name of its flat binary; `make` expects `$(INIT_DIR)/build/$(INIT_BIN_NAME).bin` |
 | `INIT_BUILD_COMMAND` | command that rebuilds it; runs before every kernel object so blob edits are picked up |
+| `SHELL_DIR` | directory of the shell project |
+| `SHELL_BIN_NAME` | base name of its flat binary; `make` expects `$(SHELL_DIR)/build/$(SHELL_BIN_NAME).bin` |
+| `SHELL_BUILD_COMMAND` | command that rebuilds it |
 
-The resulting binary is embedded with `incbin` (`src/user/blobs/init_blob.s`)
-and published as `/bin/init` at boot. Nothing from that project is expected to
-end up in this repository; it only has to produce a working flat binary.
+Both binaries are embedded with `incbin` (`src/user/blobs/init_blob.s` and
+`shell_blob.s`, via `-DINIT_BIN=` and `-DSHELL_BIN=`) and published as `/bin/init`
+and `/bin/sh` at boot. Nothing from either project is expected to end up in this
+repository; each only has to produce a working flat binary.
 
-`INIT_BUILD_COMMAND` must forward `USER_CFLAGS`, if the init project
-includes Nyvela headers (`<nyvela/user/syslib.h>`) and only learns the include
-path from this invocation. Building it by hand without that flag fails with
+`INIT_BUILD_COMMAND` must forward `USER_CFLAGS`, if the init project includes
+Nyvela headers (`<nyvela/user/syslib.h>`) and only learns the include path from
+this invocation. Building it by hand without that flag fails with
 `fatal error: nyvela/user/syslib.h: No such file or directory`.
-
 ## Targets
 
 ```sh
@@ -48,8 +54,8 @@ make debug    # boot paused, GDB stub on :1234
 make clean    # rm -rf build/
 ```
 
-`make` runs `INIT_BUILD_COMMAND` first, then rebuilds any kernel object whose
-blob changed. Outputs:
+`make` runs `INIT_BUILD_COMMAND` and `SHELL_BUILD_COMMAND`, then rebuilds any
+kernel object whose blob changed. Outputs:
 
 | file | what |
 |------|------|
@@ -69,7 +75,7 @@ truncate -s $$(( ( $(KERNEL_LBA) + $(KERNEL_SECTORS) ) * 512 )) $@
 
 ## Toolchains
 
-Both C and Rust user programs are supported.
+User programs in this tree are C.
 
 **C** uses `USER_CFLAGS`:
 
@@ -80,13 +86,6 @@ Both C and Rust user programs are supported.
 
 **`-mno-red-zone` is mandatory.** `switch_context` pushes the `iretq` frame below
 the saved user RSP, so a red zone would be clobbered across a context switch.
-
-**Rust** builds `no_std` for `x86_64-unknown-none` with:
-
-```
--C link-arg=-T<ld script> -C link-arg=-nostdlib -C link-arg=-static
--C link-arg=-no-pie -C link-arg=--gc-sections -C no-redzone=yes
-```
 
 `-C no-redzone=yes` is the Rust equivalent of the same requirement.
 
@@ -129,16 +128,19 @@ xxd -l 16 build/user/prog.bin
 
 ### Linker scripts
 
-`src/user/ld/` has one per load address:
+`src/user/ld/` holds one script, for the `0x500000` exec slot:
 
 | script | base | used by |
 |--------|------|---------|
-| `init.ld` | `0x400000` | the init program |
-| `shell.ld` | `0x400000` | the Rust shell |
-| `prog.ld` | `0x500000` | `exec` targets |
+| `prog.ld` | `0x500000` | `exec` targets, including `hello` |
 
-Each puts `*(.text._start)` first and discards notes, so as long as it is passed
+It puts `*(.text._start)` first and discards notes, so as long as it is passed
 with `-T` the entry point lands at offset 0.
+
+The init and shell projects each carry their own linker script for `0x400000`
+(`init.ld` and `shell.ld` respectively). Those are outside this tree, so if you
+are changing how a user program is linked, change the script next to that
+project, not here.
 
 ## Writing your own user program (can change in next update)
 

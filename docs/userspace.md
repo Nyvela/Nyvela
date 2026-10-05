@@ -54,8 +54,9 @@ its exit code.
 
 ## Shell
 
-Ring3, written in Rust (`src/user/shell/`),
-prompt `Nyvela > `, with line editing (echo + backspace).
+Ring3, a `no_std` Rust program built from its own project (`SHELL_DIR` in
+`nyvela.conf`, see [build system](build.md)), prompt `Nyvela > `, with line
+editing (echo + backspace).
 
 | command | effect |
 |---------|--------|

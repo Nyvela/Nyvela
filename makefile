@@ -15,8 +15,21 @@ endif
 ifndef INIT_BUILD_COMMAND
 $(error INIT_BUILD_COMMAND is not configured. (see nyvela.conf))
 endif
- 
+
+ifndef SHELL_DIR
+$(error SHELL_DIR is not configured. (see nyvela.conf))
+endif
+
+ifndef SHELL_BIN_NAME
+$(error SHELL_BIN_NAME is not configured. (see nyvela.conf))
+endif
+
+ifndef SHELL_BUILD_COMMAND
+$(error SHELL_BUILD_COMMAND is not configured. (see nyvela.conf))
+endif
+
 INIT_BIN := $(INIT_DIR)/build/$(INIT_BIN_NAME).bin
+SHELL_BIN := $(SHELL_DIR)/build/$(SHELL_BIN_NAME).bin
 
 CC := gcc
 AS := nasm
@@ -46,8 +59,6 @@ CFLAGS := -ffreestanding -m64 -mno-red-zone \
           -Wall -Wextra \
           -Iinclude -g
 
-PATH := $(HOME)/.cargo/bin:$(PATH)
-
 USER_CFLAGS := -ffreestanding -m64 -mno-red-zone \
           -fno-stack-protector -fno-pie -fno-pic \
           -ffunction-sections -fdata-sections \
@@ -57,13 +68,14 @@ USER_CFLAGS := -ffreestanding -m64 -mno-red-zone \
 USER_LDFLAGS := -nostdlib -static -Wl,--gc-sections
 
 USER_BUILD := $(BUILD)/user
-USER_SHELL_ELF := $(USER_BUILD)/shell.elf
-USER_SHELL_BIN := $(USER_BUILD)/shell.bin
 USER_HELLO_ELF := $(USER_BUILD)/hello.elf
 USER_HELLO_BIN := $(USER_BUILD)/hello.bin
 
 INIT_BLOB_S := $(SRC_DIR)/user/blobs/init_blob.s
 INIT_BLOB_O := $(BUILD)/user/blobs/init_blob.o
+
+SHELL_BLOB_S := $(SRC_DIR)/user/blobs/shell_blob.s
+SHELL_BLOB_O := $(BUILD)/user/blobs/shell_blob.o
 
 ASFLAGS := -f elf64
 LDFLAGS := -T linker.ld
@@ -106,20 +118,6 @@ $(BUILD)/%.o: $(SRC_DIR)/%.s
 	@mkdir -p $(dir $@)
 	$(AS) $(ASFLAGS) $< -o $@
 
-USER_SHELL_RS_SRC := $(SRC_DIR)/user/shell/src/main.rs $(SRC_DIR)/user/shell/src/sys.rs $(SRC_DIR)/user/shell/Cargo.toml
-
-$(USER_SHELL_ELF): $(USER_SHELL_RS_SRC) $(SRC_DIR)/user/ld/shell.ld
-	@mkdir -p $(dir $@) $(BUILD)/cargo
-	@command -v cargo >/dev/null || (echo "error: cargo not found (need rustup toolchain + x86_64-unknown-none target)"; exit 1)
-	@command -v rustc >/dev/null || (echo "error: rustc not found"; exit 1)
-	CARGO_TARGET_DIR="$(CURDIR)/$(BUILD)/cargo" \
-	RUSTFLAGS="-C link-arg=-T$(CURDIR)/$(SRC_DIR)/user/ld/shell.ld -C link-arg=-nostdlib -C link-arg=-static -C link-arg=-no-pie -C link-arg=--gc-sections -C no-redzone=yes" \
-	cargo build --manifest-path $(SRC_DIR)/user/shell/Cargo.toml --release --target x86_64-unknown-none
-	cp $(BUILD)/cargo/x86_64-unknown-none/release/shell $@
-
-$(USER_SHELL_BIN): $(USER_SHELL_ELF)
-	$(OBJCOPY) -O binary $< $@
-
 $(USER_HELLO_ELF): $(SRC_DIR)/user/hello/hello.c include/nyvela/user/syslib.h $(SRC_DIR)/user/ld/prog.ld
 	@mkdir -p $(dir $@)
 	$(CC) $(USER_CFLAGS) -T $(SRC_DIR)/user/ld/prog.ld $(USER_LDFLAGS) $< -o $@
@@ -127,7 +125,13 @@ $(USER_HELLO_ELF): $(SRC_DIR)/user/hello/hello.c include/nyvela/user/syslib.h $(
 $(USER_HELLO_BIN): $(USER_HELLO_ELF)
 	$(OBJCOPY) -O binary $< $@
 
-$(BUILD)/user/blobs/shell_blob.o: $(USER_SHELL_BIN)
+$(SHELL_BIN):
+	$(SHELL_BUILD_COMMAND)
+
+$(SHELL_BLOB_O): $(SHELL_BLOB_S) $(SHELL_BIN)
+	@mkdir -p $(dir $@)
+	$(AS) $(ASFLAGS) -DSHELL_BIN=\"$(abspath $(SHELL_BIN))\" $< -o $@
+
 $(BUILD)/user/blobs/hello_blob.o: $(USER_HELLO_BIN)
 
 $(INIT_BLOB_O): $(INIT_BLOB_S) $(INIT_BIN)

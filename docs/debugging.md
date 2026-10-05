@@ -93,7 +93,8 @@ LBA.
 | kernel runs but prints nothing, RIP inside `klog_ram_data` | memory at `0x100000` is not `kernel.bin`. Check `KERNEL_SIZE_IN_SECTORS` in `stage_2.s` and the chunk loop in `stage_1.s` |
 | ring3 `#GP` a couple of bytes into `_start` | the flat binary does not start with code, the linker script was not passed with `-T`, so offset 0 is a GNU note. See [build system](build.md) |
 | triple fault, machine reboots, `qemu.log` shows `CPU Reset` | usually a bad `iretq` frame in `switch_context`, a `TSS.rsp0` that does not match the scheduled thread, or a GDT descriptor with the wrong limit/DPL |
-| `make` stops with `INIT_DIR is not configured` | `nyvela.conf` missing, or the configured init directory does not exist |
+| `make` stops with `<KEY> is not configured` | a required `nyvela.conf` key is missing - any of the six (`INIT_DIR`, `INIT_BIN_NAME`, `INIT_BUILD_COMMAND`, `SHELL_DIR`, `SHELL_BIN_NAME`, `SHELL_BUILD_COMMAND`) |
+| `make` stops with `init directory ... does not exist` | `INIT_DIR` points somewhere that is not there; check the relative path in `nyvela.conf` |
 | init build fails with `nyvela/user/syslib.h: No such file` | `INIT_BUILD_COMMAND` is not forwarding `USER_CFLAGS` |
 
 ## Fault handler output
