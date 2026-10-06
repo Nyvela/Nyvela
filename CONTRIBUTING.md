@@ -22,6 +22,9 @@ INIT_BUILD_COMMAND = USER_CFLAGS="-I$(CURDIR)/include" make -C $(INIT_DIR)
 SHELL_DIR = ../nyvsh
 SHELL_BIN_NAME = shell
 SHELL_BUILD_COMMAND = make -C $(SHELL_DIR)
+
+NVMED_DIR = ../nvmed
+NVMED_BIN_NAME = nvmed
 ```
 
 Then `make && make run`. You should reach a `Nyvela >` prompt.

@@ -547,7 +547,8 @@ void sys_as_map(syscall_frame_t* f) {
     }
   }
 
-  if (!as || as->cr3 == current_process->cr3) {
+  if (!as || !current_thread || !current_thread->context ||
+      as->cr3 == current_thread->context->cr3) {
     f->rax = 0;
     return;
   }

@@ -28,8 +28,22 @@ ifndef SHELL_BUILD_COMMAND
 $(error SHELL_BUILD_COMMAND is not configured. (see nyvela.conf))
 endif
 
+ifndef NVMED_DIR
+$(error NVMED_DIR is not configured. (see nyvela.conf))
+endif
+
+ifndef NVMED_BIN_NAME
+$(error NVMED_BIN_NAME is not configured. (see nyvela.conf))
+endif
+
 INIT_BIN := $(INIT_DIR)/build/$(INIT_BIN_NAME).bin
 SHELL_BIN := $(SHELL_DIR)/build/$(SHELL_BIN_NAME).bin
+INIT_INPUTS := $(shell find $(INIT_DIR)/src $(INIT_DIR)/include -type f 2>/dev/null) \
+               $(INIT_DIR)/makefile $(INIT_DIR)/linker.ld
+
+NVMED_BIN := $(NVMED_DIR)/build/$(NVMED_BIN_NAME).bin
+NVMED_INPUTS := $(shell find $(NVMED_DIR)/src $(NVMED_DIR)/include -type f 2>/dev/null) \
+                $(NVMED_DIR)/makefile $(NVMED_DIR)/linker.ld
 
 CC := gcc
 AS := nasm
@@ -77,6 +91,9 @@ INIT_BLOB_O := $(BUILD)/user/blobs/init_blob.o
 SHELL_BLOB_S := $(SRC_DIR)/user/blobs/shell_blob.s
 SHELL_BLOB_O := $(BUILD)/user/blobs/shell_blob.o
 
+NVMED_BLOB_S := $(SRC_DIR)/user/blobs/nvmed_blob.s
+NVMED_BLOB_O := $(BUILD)/user/blobs/nvmed_blob.o
+
 ASFLAGS := -f elf64
 LDFLAGS := -T linker.ld
 
@@ -95,8 +112,11 @@ KERNEL_OBJ := $(C_OBJ) $(ASM_OBJ)
 
 all: $(IMAGE)
 
-$(INIT_BIN): nyvela.conf
+$(INIT_BIN): nyvela.conf $(INIT_INPUTS)
 	$(INIT_BUILD_COMMAND)
+
+$(NVMED_BIN): $(NVMED_INPUTS)
+	@$(MAKE) -C $(NVMED_DIR)
 
 $(BOOT): $(BOOT_DIR)/boot.s
 	@mkdir -p $(dir $@)
@@ -137,6 +157,10 @@ $(BUILD)/user/blobs/hello_blob.o: $(USER_HELLO_BIN)
 $(INIT_BLOB_O): $(INIT_BLOB_S) $(INIT_BIN)
 	@mkdir -p $(dir $@)
 	$(AS) $(ASFLAGS) -DINIT_BIN=\"$(abspath $(INIT_BIN))\" $< -o $@
+
+$(NVMED_BLOB_O): $(NVMED_BLOB_S) $(NVMED_BIN)
+	@mkdir -p $(dir $@)
+	$(AS) $(ASFLAGS) -DNVMED_BIN=\"$(abspath $(NVMED_BIN))\" $< -o $@
 
 $(KERNEL): $(KERNEL_OBJ)
 	@mkdir -p $(dir $@)

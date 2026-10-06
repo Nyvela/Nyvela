@@ -18,16 +18,33 @@
 #include "../../include/nyvela/drivers/video/vga/vga.h"
 #include "../../include/nyvela/process/process.h"
 
-extern uint8_t shell_blob_start[];
-extern uint8_t shell_blob_end[];
-extern uint8_t hello_blob_start[];
-extern uint8_t hello_blob_end[];
-
+extern uint8_t shell_blob_end[], shell_blob_start[];
+extern uint8_t hello_blob_end[], hello_blob_start[];
 extern uint8_t init_blob_end[], init_blob_start[];
+extern uint8_t nvmed_blob_end[], nvmed_blob_start[];
 
 void krnl() {
   for (;;) {
     hlt();
+  }
+}
+
+static void kload_user_bin(char *path, uint8_t* blob_start, uint8_t* blob_end) {
+  uint64_t bin_size = (uint64_t)(blob_end - blob_start);
+
+  if (bin_size == 0 || bin_size > VFS_MAX_FILE_SIZE) {
+    kprintferr("Bad Blob Size.", 0x0F);
+    hang();
+  }
+
+  if (vfs_create(path, false) != VFS_OK) {
+    kprintferr("Failed to create user binary.", 0x0F);
+    hang();
+  }
+
+  if (vfs_write(path, blob_start, bin_size, 0) != (int64_t)bin_size) {
+    kprintferr("Failed to write user binary.", 0x0F);
+    hang();
   }
 }
 
@@ -37,56 +54,10 @@ static void kload_user_bins(void) {
     hang();
   }
 
-  uint64_t shell_size = (uint64_t)(shell_blob_end - shell_blob_start);
-
-  if (shell_size == 0 || shell_size > VFS_MAX_FILE_SIZE) {
-    kprintferr("Bad shell blob size.", 0x0F);
-    hang();
-  }
-
-  if (vfs_create("/bin/sh", false) != VFS_OK) {
-    kprintferr("Failed to create /bin/sh.", 0x0F);
-    hang();
-  }
-
-  if (vfs_write("/bin/sh", shell_blob_start, shell_size, 0) != (int64_t)shell_size) {
-    kprintferr("Failed to write /bin/sh.", 0x0F);
-    hang();
-  }
-
-  uint64_t hello_size = (uint64_t)(hello_blob_end - hello_blob_start);
-
-  if (hello_size == 0 || hello_size > VFS_MAX_FILE_SIZE) {
-    kprintferr("Bad hello blob size.", 0x0F);
-    hang();
-  }
-
-  if (vfs_create("/bin/hello", false) != VFS_OK) {
-    kprintferr("Failed to create /bin/hello.", 0x0F);
-    hang();
-  }
-
-  if (vfs_write("/bin/hello", hello_blob_start, hello_size, 0) != (int64_t)hello_size) {
-    kprintferr("Failed to write /bin/hello.", 0x0F);
-    hang();
-  }
-
-  uint64_t init_size = (uint64_t)(init_blob_end - init_blob_start);
-
-  if (init_size == 0 || init_size > VFS_MAX_FILE_SIZE) {
-    kprintferr("Bad init blob size.", 0x0F);
-    hang();
-  }
-
-  if (vfs_create("/bin/init", false) != VFS_OK) {
-    kprintferr("Failed to create /bin/init.", 0x0F);
-    hang();
-  }
-
-  if (vfs_write("/bin/init", init_blob_start, init_size, 0) != (int64_t)init_size) {
-    kprintferr("Failed to write /bin/init.", 0x0F);
-    hang();
-  }
+  kload_user_bin("/bin/sh", shell_blob_start, shell_blob_end);
+  kload_user_bin("/bin/nvmed", nvmed_blob_start, nvmed_blob_end);
+  kload_user_bin("/bin/hello", hello_blob_start, hello_blob_end);
+  kload_user_bin("/bin/init", init_blob_start, init_blob_end);
 
   static const char readme[] =
     "Welcome to Nyvela!\n"
@@ -190,7 +161,7 @@ void kuserspace_init() {
 
   memset((void *)prog_stack, 0, 4096);
 
-  kprintinfo("Switching to ring3 shell (/bin/sh)...", 0x0F);
+  kprintinfo("Switching to ring3 shell (/bin/init)...", 0x0F);
 
   init->threads[0]->context->cs = 0x18 | 3;
   init->threads[0]->context->ss = 0x20 | 3;

@@ -45,6 +45,60 @@ repository; each only has to produce a working flat binary.
 Nyvela headers (`<nyvela/user/syslib.h>`) and only learns the include path from
 this invocation. Building it by hand without that flag fails with
 `fatal error: nyvela/user/syslib.h: No such file or directory`.
+
+### How staleness is tracked
+
+The init binary is a prerequisite of every kernel object, but on its own that is
+not enough: `make` only reruns `$(INIT_BUILD_COMMAND)` when a listed prerequisite
+is newer than the target. Depending on `nyvela.conf` alone means editing init
+sources does nothing, `nyvd.bin` keeps its old timestamp, and `incbin` embeds
+the previous build. The symptom is a kernel that boots a feature you already
+wrote - a new spawn target, a new `/bin` entry - and silently keeps the old
+behaviour, with no error anywhere.
+
+So the rule also depends on the init project's own sources:
+
+```make
+INIT_INPUTS := $(shell find $(INIT_DIR)/src $(INIT_DIR)/include -type f 2>/dev/null) \
+               $(INIT_DIR)/makefile $(INIT_DIR)/linker.ld
+
+$(INIT_BIN): nyvela.conf $(INIT_INPUTS)
+	$(INIT_BUILD_COMMAND)
+```
+
+If you add a source root to your init project, add it to `INIT_INPUTS` too, or
+that root becomes invisible to the dependency graph.
+
+### nvmed
+
+`nvmed` is a second out-of-tree user program, embedded as `/bin/nvmed`. It has no
+`nyvela.conf` keys; the makefile defaults locate it and can be overridden:
+
+```make
+NVMED_DIR ?= ../nvmed
+NVMED_BIN_NAME ?= nvmed
+NVMED_INPUTS := $(shell find $(NVMED_DIR)/src $(NVMED_DIR)/include -type f 2>/dev/null) \
+                $(NVMED_DIR)/makefile $(NVMED_DIR)/linker.ld
+
+$(NVMED_BIN): $(NVMED_INPUTS)
+	@$(MAKE) -C $(NVMED_DIR)
+
+$(NVMED_BLOB_O): $(NVMED_BLOB_S) $(NVMED_BIN)
+	$(AS) $(ASFLAGS) -DNVMED_BIN=\"$(abspath $(NVMED_BIN))\" $< -o $@
+```
+
+The `-D` is load-bearing. An `incbin` of a relative path is resolved by `nasm`
+relative to the `.s` file and carries no timestamp, so the blob object stays
+valid no matter what the binary on disk contains - which is how an edited nvmed
+kept booting as its previous build. Passing the absolute path through a define
+ties the object to the binary, and the binary to its sources.
+
+`SHELL_BIN` has no prerequisites at all, so it is rebuilt only when it is
+missing. That is fine for the out-of-tree shell, which has no source vendored
+here and is rebuilt by hand; it is not fine for an in-tree program. When you add
+a user program to this tree, give its binary explicit prerequisites (see
+`USER_HELLO_BIN` below) rather than relying on `make` noticing the change.
+
 ## Targets
 
 ```sh
@@ -54,8 +108,8 @@ make debug    # boot paused, GDB stub on :1234
 make clean    # rm -rf build/
 ```
 
-`make` runs `INIT_BUILD_COMMAND` and `SHELL_BUILD_COMMAND`, then rebuilds any
-kernel object whose blob changed. Outputs:
+`make` rebuilds the init binary if any of its sources changed, then rebuilds any
+kernel object whose blob changed, then assembles the image. Outputs:
 
 | file | what |
 |------|------|
@@ -151,7 +205,14 @@ project, not here.
 2. Add `USER_<NAME>_*` rules to the `makefile` (copy the `USER_HELLO_*` block),
    linking with `src/user/ld/prog.ld` **via `-T`**. Add
    `src/user/blobs/<name>_blob.s` (copy `hello_blob.s`, point `incbin` at your
-   `.bin`).
+   `.bin`). Give the `.bin` a rule listing its sources - an empty rule like
+   `$(USER_<NAME>_BIN):` rebuilds only when the file is missing, so source edits
+   silently boot the previous binary. Also add the object as a prerequisite of
+   its blob:
+
+   ```make
+   $(BUILD)/user/blobs/<name>_blob.o: $(USER_<NAME>_BIN)
+   ```
 3. Publish it in `kload_user_bins()` (`src/kernel/kernel.c`) with `vfs_create` +
    `vfs_write`, e.g. as `/bin/<name>`.
 4. `make && make run`, then `run <name>` in the shell.
