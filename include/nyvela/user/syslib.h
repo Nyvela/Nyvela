@@ -178,9 +178,9 @@ typedef struct block_t {
   struct block_t* next;
 } block_t;
 
-block_t* CURRENT_BLOCK;
+static block_t* CURRENT_BLOCK;
 
-bool malloc_init() {
+static bool malloc_init() {
   void* page = (void*)sys_call(SYS_ALLOC_PAGE, 0, 0, 0, 0);
   if (!page) return false;
 
@@ -195,7 +195,7 @@ bool malloc_init() {
   return true;
 }
 
-void* malloc(uint64_t size) {
+static void* malloc(uint64_t size) {
   if (size == 0 || size >= (4096 - sizeof(block_t))) {
     return NULL;
   }
@@ -247,14 +247,14 @@ void* malloc(uint64_t size) {
   return NULL;
 }
 
-void free(void *ptr) {
+static void free(void *ptr) {
   if (!ptr) return;
 
   block_t* block = (block_t*)((uint8_t*)ptr - sizeof(block_t));
   block->is_used = false;
 }
 
-void* realloc(void* ptr, uint64_t new_size) {
+static void* realloc(void* ptr, uint64_t new_size) {
   if (!ptr) {
     return malloc(new_size);
   }
