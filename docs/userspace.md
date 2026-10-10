@@ -1,15 +1,23 @@
 # Userspace
 
-## Processes and address spaces (to be removed)
+## Threads and address spaces
 
-`spawn_process()` (`src/process/process.c`) allocates a `process_t`, gives it a
-PID, and creates a **fresh user PML4** with `kvmm_create_user_pml4()`. Every
-process therefore has its own address space; user pages are mapped with flags
-`0x07` (present, writable, user), and `kvmmap_at` propagates `U/S` up the path
-tables.
+There is no process layer. The scheduling unit is a `thread_t`
+(`src/thread/thread.c`), identified by a `tid`. The kernel spawns exactly two of
+them - a ring0 idle thread and the init thread - then hands control to ring3 and
+never constructs another. From that point on **the init program is responsible
+for creating everything else**, via syscalls.
 
-Each process owns one `thread_t` today. The ring0 idle process just runs `hlt`
-in a loop.
+A thread carries its address space directly - `thread_t.context->cr3` is the
+root it runs under, so two threads in the same `cr3` share memory and two
+threads in different `cr3`s do not. Fresh ring3 address spaces come from
+`kvmm_create_user_pml4()`, which is what `as_create` (`30`) hands out and what
+`exec` (`20`) builds per child.
+
+User pages are mapped with flags `0x07` (present, writable, user), and
+`kvmmap_at` propagates `U/S` up the path tables.
+
+The ring0 idle thread just runs `hlt` in a loop.
 
 ## Memory layout
 
@@ -30,8 +38,8 @@ Constants live in `include/nyvela/mm/vmm.h` and are mirrored in `syslib.h`:
 
 The kernel does the first steps itself in `kuserspace_init()`:
 
-1. Spawn the ring0 idle process.
-2. Spawn the init process with entry `USER_CODE_VIRT`.
+1. Spawn the ring0 idle thread.
+2. Spawn the init thread with entry `USER_CODE_VIRT`.
 3. Allocate and map pages for its image, then load `/bin/init` into them with
    `exec_load`.
 4. Map its stack, the `exec` program slot, and the program stack.
@@ -48,9 +56,9 @@ The init program (the external project configured in `nyvela.conf`, see
 4. `create_thread` at `USER_CODE_VIRT` with `rsp = USER_STACK_PAGE + 4096`.
 
 `exec` (`SYS_EXEC`) does the same thing for foreground programs: it spawns a
-child process, re-maps the `PROG_BASE` slot onto fresh pages, reads the file in,
-runs it ring3, blocks on `sti/hlt` until the child dies, reaps it, and returns
-its exit code.
+child thread in a fresh address space, re-maps the `PROG_BASE` slot onto fresh
+pages, reads the file in, runs it ring3, blocks on `sti/hlt` until the child
+dies, reaps it, and returns its exit code.
 
 ## Shell
 
@@ -73,18 +81,19 @@ Paths resolve against `/` with trailing slashes stripped. Errors print readably
 
 ## IPC
 
-Scaffold only. `SYS_IPC` (`5`) takes a target PID and copies bytes into
-`USER_AREA_BASE + 0x1F0` in every matching process. There is no receive side,
-no queueing, and the scratch address sits inside the target's first code page,
-so it clobbers the target's image. Treat it as a placeholder for the interface,
-not a working feature.
+Queued messages only. `SYS_IPC_SEND` (`5`) takes a target `tid` and copies the
+bytes into that thread's per-thread queue; `SYS_IPC_POLL` (`6`) pops one and
+copies it back to a user buffer, returning the byte count (`0` on failure).
+Queues grow on demand (`ipc_grow_queue`) and are freed with their thread. There
+is no blocking receive - `poll` returns immediately with `0` when the queue is
+empty.
 
 ## Known limitations
 
 * The exec slot is single-use: one foreground program at a time, no arguments,
   no pipes, no background jobs.
-* No process reaping for threads that exit outside `exec`; `DEAD` threads linger
-  and the scheduler skips them.
+* Nothing reaps a thread that exits outside `exec`; `DEAD` threads linger and
+  the scheduler skips them.
 * User pointers are range-checked but not ownership-checked.
 * No ELF loader - flat binaries only, entry at a fixed base.
 

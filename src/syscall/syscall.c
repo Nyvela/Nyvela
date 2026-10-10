@@ -147,7 +147,6 @@ static void sys_exit(syscall_frame_t *f) {
   }
 
   current_thread = next;
-  current_process = next->process;
 
   if (next->kernel_stack) {
     tss.rsp0 = ((uint64_t)next->kernel_stack + 4096 * KERNEL_STACK_SIZE_IN_PAGES);
@@ -260,31 +259,18 @@ static void sys_read(syscall_frame_t *f) {
   f->rax = got;
 }
 
-static void exec_reap(process_t *child) {
-  thread_t *t = child->threads ? child->threads[0] : NULL;
-
-  if (t && t != current_thread) {
-    for (uint64_t i = 0; i < threads_length; i++) {
-      if (threads[i] == t) {
-        for (uint64_t j = i; j + 1 < threads_length; j++) threads[j] = threads[j + 1];
-        threads_length--;
-        break;
-      }
-    }
-
-    free_thread(t);
-    child->threads[0] = NULL;
-  }
-
-  for (uint64_t i = 0; i < processes_length; i++) {
-    if (processes[i] == child) {
-      for (uint64_t j = i; j + 1 < processes_length; j++) processes[j] = processes[j + 1];
-      processes_length--;
+static void exec_reap(thread_t *child) {
+  for (uint64_t i = 0; i < threads_length; i++) {
+    if (threads[i] == child) {
+      for (uint64_t j = i; j + 1 < threads_length; j++) 
+        threads[j] = threads[j + 1];
+      threads_length--;
       break;
     }
   }
-
-  free_process(child);
+  
+  kvmm_free_user_pml4(child->context->cr3);
+  free_thread(child);
 }
 
 static void sys_exec(syscall_frame_t *f) {
@@ -296,19 +282,29 @@ static void sys_exec(syscall_frame_t *f) {
   }
 
   int64_t size = vfs_size(path);
+
   if (size < 0) {
     f->rax = (uint64_t)size;
     return;
   }
+
   if (size == 0 || (uint64_t)size > PROG_MAX) {
     f->rax = (uint64_t)(int64_t)VFS_ERR_NOSPACE;
     return;
   }
+
   uint64_t pages = ((uint64_t)size + 4095) / 4096;
   
   cli();
 
-  process_t *child = spawn_process((void (*)(void))PROG_BASE);
+  uint64_t cr3 = kvmm_create_user_pml4();
+
+  if (!cr3) {
+    f->rax = (uint64_t)(int64_t)VFS_ERR_NOSPACE;
+    return;
+  }
+
+  thread_t *child = spawn_thread((void (*)(void))PROG_BASE, cr3);
   
   if (!child) {
     sti();
@@ -317,14 +313,15 @@ static void sys_exec(syscall_frame_t *f) {
   }
 
   for (uint64_t i = 0; i < PROG_PAGES; i++) {
-    kvmunmap_and_free_at(child->cr3, PROG_BASE + i * 4096);
+    kvmunmap_and_free_at(child->context->cr3, PROG_BASE + i * 4096);
   }
 
   for (uint64_t i = 0; i < pages; i++) {
     uint64_t phys = (uint64_t)kpalloc();
+
     if (!phys) {
       for (uint64_t j = 0; j < i; j++) {
-        kvmunmap_and_free_at(child->cr3, PROG_BASE + j * 4096);
+        kvmunmap_and_free_at(child->context->cr3, PROG_BASE + j * 4096);
       }
 
       exec_reap(child);
@@ -333,12 +330,13 @@ static void sys_exec(syscall_frame_t *f) {
       f->rax = (uint64_t)(int64_t)VFS_ERR_NOSPACE;
       return;
     }
+
     memset((void*)phys, 0, 0x1000);
-    kvmmap_at(child->cr3, PROG_BASE + i * 4096, phys, 0x07);
+    kvmmap_at(child->context->cr3, PROG_BASE + i * 4096, phys, 0x07);
   }
   
   uint64_t old = read_cr3();
-  write_cr3(child->cr3);
+  write_cr3(child->context->cr3);
   
   int64_t read = vfs_read(path, (void*)PROG_BASE, (uint64_t)size, 0);
   
@@ -346,7 +344,7 @@ static void sys_exec(syscall_frame_t *f) {
 
   if (read < 0 || read != size) {
     for (uint64_t i = 0; i < pages; i++) {
-      kvmunmap_and_free_at(child->cr3, PROG_BASE + i * 4096);
+      kvmunmap_and_free_at(child->context->cr3, PROG_BASE + i * 4096);
     }
 
     exec_reap(child);
@@ -356,17 +354,17 @@ static void sys_exec(syscall_frame_t *f) {
     return;
   }
 
-  child->threads[0]->context->cs = 0x18 | 3;
-  child->threads[0]->context->ss = 0x20 | 3;
-  child->threads[0]->context->rsp = PROG_STACK_TOP;
+  child->context->cs = 0x18 | 3;
+  child->context->ss = 0x20 | 3;
+  child->context->rsp = PROG_STACK_TOP;
   
   sti();
 
-  while (child->threads[0]->state != THREAD_DEAD) {
+  while (child->state != THREAD_DEAD) {
     __asm__ volatile ("sti; hlt; cli" ::: "memory");
   }
 
-  uint64_t code = child->threads[0]->exit_code;
+  uint64_t code = child->exit_code;
 
   exec_reap(child);
 
@@ -636,13 +634,13 @@ void sys_as_free(syscall_frame_t* f) {
 void sys_unmmap(syscall_frame_t *f) {
   if (!f->rdi) return;
 
-  kvmunmap_at(current_process->cr3, f->rdi);
+  kvmunmap_at(current_thread->context->cr3, f->rdi);
 }
 
 void sys_unmmap_and_free(syscall_frame_t *f) {
   if (!f->rdi) return;
 
-  kvmunmap_and_free_at(current_process->cr3, f->rdi);
+  kvmunmap_and_free_at(current_thread->context->cr3, f->rdi);
 }
 
 void syscall_handler(syscall_frame_t *f) {

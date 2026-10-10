@@ -5,7 +5,6 @@
 #include "../../include/nyvela/mm/pmm.h"
 #include "../../include/nyvela/lib/utils.h"
 #include "../../include/nyvela/mm/vmm.h"
-#include "../../include/nyvela/process/process.h"
 
 thread_t **threads;
 thread_t *current_thread;
@@ -81,7 +80,6 @@ thread_t* allocate_thread() {
 
   thread->context = context;
   thread->kernel_stack = kernel_stack;
-  thread->process = current_process;
 
   return thread;
 }

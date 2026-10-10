@@ -31,6 +31,7 @@
 #define SYS_MMAP 42ULL
 #define SYS_UNMMAP 43ULL
 #define SYS_UNMMAP_AND_FREE 44ULL
+#define SYS_MAP_MMIO 45ULL // privileged
 
 #define SYSCALL_VECTOR 0x80
 

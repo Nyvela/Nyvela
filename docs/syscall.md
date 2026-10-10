@@ -31,14 +31,14 @@ failure.
 | 2 | `yield` | - | no-op, returns 0 (preemption is timer-driven) |
 | 3 | `read` | `fd` (0), `buf`, `len` | blocking keyboard read; waits with `sti/hlt` until at least one byte |
 | 4 | `clear` | - | clears the console |
-| 5 | `ipc_send` | `target_pid`, `buf`, `size` | queues IPC message to matching target process |
-| 6 | `ipc_poll` | `buf`, `size` | copies `uint8_t*` from IPC message to `buf`, returns amount of bytes written. 0 indicates failure |
+| 5 | `ipc_send` | `target_tid`, `buf`, `size` | queues an IPC message on the target thread's queue |
+| 6 | `ipc_poll` | `buf`, `size` | pops one IPC message from the caller's queue and copies `size` bytes to `buf`, returns the amount of bytes written. 0 indicates failure or an empty queue |
 | 10 | `fs_create` | `path`, `is_dir=rsi` | `vfs_create` |
 | 11 | `fs_write` | `path`, `buf`, `len`, `offset=r10` | `vfs_write` |
 | 12 | `fs_read` | `path`, `buf`, `len`, `offset=r10` | `vfs_read` |
 | 13 | `fs_list` | `path`, `buf`, `len` | newline-separated names plus NUL, returns bytes excluding NUL |
 | 14 | `fs_size` | `path` | size in bytes |
-| 20 | `exec` | `path` | runs a ramfs file in the `0x500000` slot in a child process, blocks until exit, returns its exit code; file must be `<= PROG_MAX` |
+| 20 | `exec` | `path` | runs a ramfs file in the `0x500000` slot in a child thread with a fresh address space, blocks until exit, returns its exit code; file must be `<= PROG_MAX` |
 | 21 | `create_thread` | `entry`, `as_id`, `rsp` | spawns a ring3 thread in the given address space, returns `tid` |
 | 22 | `free_thread` | `tid` | frees a thread handle |
 | 30 | `as_create` | - | creates an address space, returns its id |
@@ -58,9 +58,9 @@ NUL-terminated within `SYSCALL_MAX_PATH` (256) bytes, buffers are capped at
 `SYSCALL_MAX_BUF` (2048). Each syscall copies through a `kmalloc` bounce buffer
 rather than touching user memory directly.
 
-The range check exists because all user processes currently share one flat
-layout, so a bad pointer is only caught by range, not by ownership. Once address
-spaces are properly isolated this should be tightened to per-space validation.
+The range check exists because user threads currently share one flat layout, so a
+bad pointer is only caught by range, not by ownership. Once address spaces are
+properly isolated this should be tightened to per-space validation.
 
 ## Interrupts
 

@@ -113,6 +113,6 @@ disabled (`kpic_disable`).
 Fault handling is log-and-halt: the handlers dump the vector, error code, RIP,
 CS, RSP and 16 bytes at RIP in hex, then stop. There is no recovery and no IST
 stacks yet, so a fault in ring3 takes the whole machine down rather than killing
-the process.
+the thread.
 
 See also: [build system](build.md), [debugging](debugging.md).

@@ -16,7 +16,6 @@
 #include "../../include/nyvela/drivers/kbd/kbd.h"
 #include "../../include/nyvela/ktests/ktests.h"
 #include "../../include/nyvela/drivers/video/vga/vga.h"
-#include "../../include/nyvela/process/process.h"
 
 extern uint8_t shell_blob_end[], shell_blob_start[];
 extern uint8_t hello_blob_end[], hello_blob_start[];
@@ -77,17 +76,24 @@ static void kload_user_bins(void) {
 }
 
 void kuserspace_init() {
-  process_t *idle = spawn_process(krnl);
+  thread_t *idle = spawn_thread(krnl, read_cr3());
 
   if (!idle) {
-    kprintferr("Failed to spawn idle process.", 0x0F);
+    kprintferr("Failed to spawn idle thread.", 0x0F);
     hang();
   }
 
-  process_t *init = spawn_process((void (*)(void))USER_CODE_VIRT);
+  uint64_t cr3 = kvmm_create_user_pml4();
+
+  if (!cr3) {
+    kprintferr("Failed to create address space for init thread.", 0x0F);
+    hang();
+  }
+
+  thread_t *init = spawn_thread((void (*)(void))USER_CODE_VIRT, cr3);
 
   if (!init) {
-    kprintferr("Failed to spawn init process.", 0x0F);
+    kprintferr("Failed to spawn init thread.", 0x0F);
     __asm__ volatile ("cli\nhlt");
   }
 
@@ -97,18 +103,18 @@ void kuserspace_init() {
     uint64_t phys = (uint64_t)kpalloc();
 
     if (!phys) {
-      kprintferr("Failed to allocate memory for init process.", 0x0F);
+      kprintferr("Failed to allocate memory for init thread.", 0x0F);
       hang();
     }
 
-    if (!kvmmap_at(init->cr3, USER_CODE_VIRT + i * 4096, phys, 0x07)) {
-      kprintferr("Failed to map shell.", 0x0F);
+    if (!kvmmap_at(init->context->cr3, USER_CODE_VIRT + i * 4096, phys, 0x07)) {
+      kprintferr("Failed to map init thread image.", 0x0F);
       hang();
     }
   }
   
   uint64_t old_cr3 = read_cr3();
-  write_cr3(init->cr3);
+  write_cr3(init->context->cr3);
 
   if (exec_load("/bin/init", USER_CODE_VIRT, code_page_count * 4096) < 0) {
     kprintferr("Failed to load /bin/init.", 0x0F);
@@ -120,12 +126,12 @@ void kuserspace_init() {
   uint64_t stack_phys = (uint64_t)kpalloc();
 
   if (!stack_phys) {
-    kprintferr("Failed to allocate stack for init process.", 0x0F);
+    kprintferr("Failed to allocate stack for init thread.", 0x0F);
     hang();
   }
 
-  if (!kvmmap_at(init->cr3, USER_STACK_PAGE, stack_phys, 0x07)) {
-    kprintferr("Failed to map init process stack.", 0x0F);
+  if (!kvmmap_at(init->context->cr3, USER_STACK_PAGE, stack_phys, 0x07)) {
+    kprintferr("Failed to map init thread stack.", 0x0F);
     __asm__ volatile ("cli\nhlt");
   }
 
@@ -139,7 +145,7 @@ void kuserspace_init() {
       hang();
     }
 
-    if (!kvmmap_at(init->cr3, PROG_BASE + i * 4096, phys, 0x07)) {
+    if (!kvmmap_at(init->context->cr3, PROG_BASE + i * 4096, phys, 0x07)) {
       kprintferr("Failed to map program slot.", 0x0F);
       hang();
     }
@@ -154,7 +160,7 @@ void kuserspace_init() {
     hang();
   }
 
-  if (!kvmmap_at(init->cr3, PROG_STACK_PAGE, prog_stack, 0x07)) {
+  if (!kvmmap_at(init->context->cr3, PROG_STACK_PAGE, prog_stack, 0x07)) {
     kprintferr("Failed to map program stack.", 0x0F);
     hang();
   }
@@ -163,13 +169,13 @@ void kuserspace_init() {
 
   kprintinfo("Switching to ring3 shell (/bin/init)...", 0x0F);
 
-  init->threads[0]->context->cs = 0x18 | 3;
-  init->threads[0]->context->ss = 0x20 | 3;
-  init->threads[0]->context->rsp = USER_STACK_TOP;
+  init->context->cs = 0x18 | 3;
+  init->context->ss = 0x20 | 3;
+  init->context->rsp = USER_STACK_TOP;
 
-  current_thread = init->threads[0];
-  tss.rsp0 = ((uint64_t)init->threads[0]->kernel_stack + 4096 * KERNEL_STACK_SIZE_IN_PAGES);
-  switch_context(init->threads[0]->context);
+  current_thread = init;
+  tss.rsp0 = ((uint64_t)init->kernel_stack + 4096 * KERNEL_STACK_SIZE_IN_PAGES);
+  switch_context(init->context);
 }
 
 __attribute__((section(".text.entry")))

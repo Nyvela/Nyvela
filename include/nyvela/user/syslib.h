@@ -10,7 +10,8 @@
 #define SYS_YIELD 2ULL
 #define SYS_READ 3ULL
 #define SYS_CLEAR 4ULL
-#define SYS_IPC 5ULL
+#define SYS_IPC_SEND 5ULL
+#define SYS_IPC_POLL 6ULL
 
 #define SYS_FS_CREATE 10ULL
 #define SYS_FS_WRITE 11ULL
