@@ -554,7 +554,7 @@ void sys_as_map(syscall_frame_t* f) {
   uint64_t phys = kget_phys_page_addr_at(current_thread->context->cr3, f->rdx);
   if (!phys) { f->rax = 0; return; }
 
-  f->rax = kvmmap_at(as->cr3, f->rsi, phys, f->r10);
+  f->rax = kvmmap_at(as->cr3, f->rsi, phys, f->r10 & 0x07);
 }
 
 void sys_create_thread(syscall_frame_t* f) {
@@ -600,13 +600,36 @@ void sys_alloc_page(syscall_frame_t* f) {
 }
 
 void sys_mmap(syscall_frame_t* f) {
-  f->rax = kvmmap_at(current_thread->context->cr3, f->rdi, f->rsi, f->rdx);
+  uint64_t virt = f->rdi;
+  uint64_t phys = f->rsi;
+
+  if ((virt | phys) & 0xFFF || !kis_normal_ram(phys)) { 
+    f->rax = 0;
+    return;
+  }
+
+  f->rax = kvmmap_at(current_thread->context->cr3, virt, phys, f->rdx & 0x07);
 }
 
 void sys_free_thread(syscall_frame_t* f) {
-  if (!f->rdi) return;
+  if (!f->rdi || f->rdi == current_thread->tid) return;
+  
+  thread_t *t = NULL;
 
-  free_thread((thread_t*)f->rdi);
+  for (uint64_t i = 0; i < threads_length; i++) {
+    if (threads[i]->tid == f->rdi) {
+      t = threads[i];
+      break;
+    }
+  }
+
+  if (!t) {
+    f->rax = (uint64_t)(int64_t)VFS_ERR_INVAL;
+    return;
+  }
+
+  free_thread(t);
+  f->rax = 0;
 }
 
 void sys_free_page(syscall_frame_t* f) {

@@ -95,6 +95,16 @@ void free_thread(thread_t* thread) {
     kfree(thread->context);
   }
 
+  if (thread->queue) {
+    for (uint64_t i = 0; i < thread->queue->count; i++) {
+      ipc_msg_t *m = &thread->queue->queue[(thread->queue->head) + i % thread->queue->capacity];
+      kfree(m->msg);
+    }
+
+    if (thread->queue->queue) kfree(thread->queue->queue);
+    kfree(thread->queue);
+  }
+
   kfree(thread);
 }
 

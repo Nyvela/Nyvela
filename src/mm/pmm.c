@@ -5,7 +5,7 @@
 
 extern uint8_t kernel_end;
 
-uint64_t* MMAP_COUNT = (uint64_t*)0xCFFE;
+uint16_t* MMAP_COUNT = (uint16_t*)0xCFFE;
 e820_entry_t* MMAP_ENTRIES = (e820_entry_t*)0xD000;
 uint8_t* BITMAP = (uint8_t*)0x10000;
 uint64_t BITMAP_SIZE = 0;
@@ -14,6 +14,8 @@ uint64_t FRAME_COUNT = 0;
 bool kpmm_init() {
   uint64_t end_addr = 0;
   uint64_t mmap_entry_count = *MMAP_COUNT;
+
+  if (mmap_entry_count > MMAP_ENTRIES_MAX) mmap_entry_count = MMAP_ENTRIES_MAX;
 
   for (uint64_t i = 0; i < mmap_entry_count; i++) {
     if (MMAP_ENTRIES[i].type != E820_USABLE) continue;
@@ -191,4 +193,30 @@ void kpfree_contiguous(void* page, uint64_t pages) {
   }
 
   write_flags(flags);
+}
+
+bool kis_normal_ram(uint64_t phys) {
+  if (phys & 0xFFF) return false;
+  
+  if (phys < (uint64_t)&kernel_end) {
+    return false;
+  }
+
+  if (phys >= (uint64_t)BITMAP && phys < (uint64_t)BITMAP + BITMAP_SIZE) {
+    return false;
+  }
+
+  uint64_t count = *MMAP_COUNT;
+  if (count > MMAP_ENTRIES_MAX) count = MMAP_ENTRIES_MAX;
+
+  for (uint64_t i = 0; i < count; i++) {
+    if (MMAP_ENTRIES[i].type != E820_USABLE) continue;
+
+    uint64_t base = MMAP_ENTRIES[i].base_addr;
+    uint64_t end = base + MMAP_ENTRIES[i].length_in_bytes;
+
+    if (phys >= base && phys < end) return true;
+  }
+
+  return false;
 }

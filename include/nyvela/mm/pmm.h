@@ -34,10 +34,14 @@ void* kpalloc_top(void);
 void kpfree(void* page);
 void kpfree_contiguous(void* page, uint64_t pages);
 
-extern uint64_t* MMAP_COUNT;
+bool kis_normal_ram(uint64_t phys);
+
+extern uint16_t* MMAP_COUNT;
 extern e820_entry_t* MMAP_ENTRIES;
 extern uint8_t* BITMAP;
 extern uint64_t BITMAP_SIZE;
 extern uint64_t FRAME_COUNT;
+
+#define MMAP_ENTRIES_MAX 512
 
 #endif // NYVPMM_H
