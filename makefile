@@ -33,7 +33,15 @@ $(error NVMED_DIR is not configured. (see nyvela.conf))
 endif
 
 ifndef NVMED_BIN_NAME
-$(error NVMED_BIN_NAME is not configured. (see nyvela.conf))
+$(error NPCID_BIN_NAME is not configured. (see nyvela.conf))
+endif
+
+ifndef NPCID_DIR
+$(error NVMED_DIR is not configured. (see nyvela.conf))
+endif
+
+ifndef NPCID_BIN_NAME
+$(error NPCID_BIN_NAME is not configured. (see nyvela.conf))
 endif
 
 INIT_BIN := $(INIT_DIR)/build/$(INIT_BIN_NAME).bin
@@ -44,6 +52,10 @@ INIT_INPUTS := $(shell find $(INIT_DIR)/src $(INIT_DIR)/include -type f 2>/dev/n
 NVMED_BIN := $(NVMED_DIR)/build/$(NVMED_BIN_NAME).bin
 NVMED_INPUTS := $(shell find $(NVMED_DIR)/src $(NVMED_DIR)/include -type f 2>/dev/null) \
                 $(NVMED_DIR)/makefile $(NVMED_DIR)/linker.ld
+
+NPCID_BIN := $(NPCID_DIR)/build/$(NPCID_BIN_NAME).bin
+NPCID_INPUTS := $(shell find $(NPCID_DIR)/src $(NPCID_DIR)/include -type f 2>/dev/null) \
+                $(NVMED_DIR)/makefile $(NPCID_DIR)/linker.ld
 
 CC := gcc
 AS := nasm
@@ -94,6 +106,9 @@ SHELL_BLOB_O := $(BUILD)/user/blobs/shell_blob.o
 NVMED_BLOB_S := $(SRC_DIR)/user/blobs/nvmed_blob.s
 NVMED_BLOB_O := $(BUILD)/user/blobs/nvmed_blob.o
 
+NPCID_BLOB_S := $(SRC_DIR)/user/blobs/npcid_blob.s
+NPCID_BLOB_O := $(BUILD)/user/blobs/npcid_blob.o
+
 ASFLAGS := -f elf64
 LDFLAGS := -T linker.ld
 
@@ -117,6 +132,9 @@ $(INIT_BIN): nyvela.conf $(INIT_INPUTS)
 
 $(NVMED_BIN): $(NVMED_INPUTS)
 	@$(MAKE) -C $(NVMED_DIR)
+
+$(NPCID_BIN): $(NPCID_INPUTS)
+	@$(MAKE) -C $(NPCID_DIR)
 
 $(BOOT): $(BOOT_DIR)/boot.s
 	@mkdir -p $(dir $@)
@@ -161,6 +179,10 @@ $(INIT_BLOB_O): $(INIT_BLOB_S) $(INIT_BIN)
 $(NVMED_BLOB_O): $(NVMED_BLOB_S) $(NVMED_BIN)
 	@mkdir -p $(dir $@)
 	$(AS) $(ASFLAGS) -DNVMED_BIN=\"$(abspath $(NVMED_BIN))\" $< -o $@
+
+$(NPCID_BLOB_O): $(NPCID_BLOB_S) $(NPCID_BIN)
+	@mkdir -p $(dir $@)
+	$(AS) $(ASFLAGS) -DNPCID_BIN=\"$(abspath $(NPCID_BIN))\" $< -o $@
 
 $(KERNEL): $(KERNEL_OBJ)
 	@mkdir -p $(dir $@)

@@ -21,6 +21,7 @@ extern uint8_t shell_blob_end[], shell_blob_start[];
 extern uint8_t hello_blob_end[], hello_blob_start[];
 extern uint8_t init_blob_end[], init_blob_start[];
 extern uint8_t nvmed_blob_end[], nvmed_blob_start[];
+extern uint8_t npcid_blob_end[], npcid_blob_start[];
 
 void krnl() {
   for (;;) {
@@ -55,6 +56,7 @@ static void kload_user_bins(void) {
 
   kload_user_bin("/bin/sh", shell_blob_start, shell_blob_end);
   kload_user_bin("/bin/nvmed", nvmed_blob_start, nvmed_blob_end);
+  kload_user_bin("/bin/npcid", npcid_blob_start, npcid_blob_end);
   kload_user_bin("/bin/hello", hello_blob_start, hello_blob_end);
   kload_user_bin("/bin/init", init_blob_start, init_blob_end);
 

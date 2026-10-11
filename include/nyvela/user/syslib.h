@@ -32,6 +32,8 @@
 #define SYS_MMAP 42ULL
 #define SYS_UNMMAP 43ULL
 #define SYS_UNMMAP_AND_FREE 44ULL
+#define SYS_MAP_MMIO 45ULL // privileged
+#define SYS_PCI_CONF_READ32 46ULL // privileged
 
 #define USER_CODE_VIRT 0x400000ULL
 #define USER_STACK_TOP 0x450000ULL
@@ -179,9 +181,9 @@ typedef struct block_t {
   struct block_t* next;
 } block_t;
 
-static block_t* CURRENT_BLOCK;
+__attribute__((weak)) block_t* CURRENT_BLOCK;
 
-static bool malloc_init() {
+static inline bool malloc_init() {
   void* page = (void*)sys_call(SYS_ALLOC_PAGE, 0, 0, 0, 0);
   if (!page) return false;
 
@@ -196,7 +198,7 @@ static bool malloc_init() {
   return true;
 }
 
-static void* malloc(uint64_t size) {
+static inline void* malloc(uint64_t size) {
   if (size == 0 || size >= (4096 - sizeof(block_t))) {
     return NULL;
   }
@@ -248,14 +250,14 @@ static void* malloc(uint64_t size) {
   return NULL;
 }
 
-static void free(void *ptr) {
+static inline void free(void *ptr) {
   if (!ptr) return;
 
   block_t* block = (block_t*)((uint8_t*)ptr - sizeof(block_t));
   block->is_used = false;
 }
 
-static void* realloc(void* ptr, uint64_t new_size) {
+static inline void* realloc(void* ptr, uint64_t new_size) {
   if (!ptr) {
     return malloc(new_size);
   }

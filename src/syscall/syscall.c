@@ -12,6 +12,7 @@
 #include "../../include/nyvela/lib/utils.h"
 #include "../../include/nyvela/ipc/ipc.h"
 #include "../../include/nyvela/arch/x86_64/asm/cpu.h"
+#include "../../include/nyvela/arch/x86_64/asm/io.h"
 #include "../../include/nyvela/mm/pmm.h"
 #include "../../include/nyvela/as/as.h"
 
@@ -666,6 +667,18 @@ void sys_unmmap_and_free(syscall_frame_t *f) {
   kvmunmap_and_free_at(current_thread->context->cr3, f->rdi);
 }
 
+void sys_pci_conf_read32(syscall_frame_t *f) {
+  if (f->rdx >= 32 || f->rcx >= 8 || f->r10 >= 253) {
+    f->rax = 0;
+    return;
+  }
+
+  uint32_t address = 0x80000000u | ((uint32_t)f->rdi << 16) | ((uint32_t)f->rdx << 11) | ((uint32_t)f->rcx << 8) | (f->r10 & 0xFC);
+  outl(0xCF8, address);
+  
+  f->rax = inl(0xCFC);
+}
+
 void syscall_handler(syscall_frame_t *f) {
   if (!f) return;
 
@@ -760,6 +773,10 @@ void syscall_handler(syscall_frame_t *f) {
 
     case SYS_UNMMAP_AND_FREE:
       sys_unmmap_and_free(f);
+      break;
+
+    case SYS_PCI_CONF_READ32:
+      sys_pci_conf_read32(f);
       break;
 
     default:
