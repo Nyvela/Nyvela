@@ -105,10 +105,12 @@ allocators:
 
 ## Interrupts
 
-`kidt_init` installs a 256-slot IDT with 7 vectors: `#DE`, `#PF`, `#GP` stubs
-plus PIT `0x20`, keyboard `0x21`, LAPIC timer `0x30`, and the syscall gate
-`0x80` at DPL 3. The PIT is used only to calibrate the LAPIC and is then
-disabled (`kpic_disable`).
+`kidt_init` installs a 256-slot IDT with 9 vectors: `#DE`, `#PF`, `#GP`, `#UD`
+and `#DF` stubs, plus PIT `0x20`, keyboard `0x21`, LAPIC timer `0x30`, and the
+syscall gate `0x80` at DPL 3. The PIT is used only to calibrate the LAPIC and is
+then disabled (`kpic_disable`). `#PF` and `#DF` get IST stacks (`isr_pf` on IST 1,
+`isr_df` on IST 2) so a fault taken from ring3 does not fault again on a bad
+user `rsp`.
 
 Fault handling is log-and-halt: the handlers dump the vector, error code, RIP,
 CS, RSP and 16 bytes at RIP in hex, then stop. There is no recovery and no IST

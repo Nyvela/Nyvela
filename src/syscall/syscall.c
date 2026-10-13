@@ -513,6 +513,7 @@ void sys_ipc_send(syscall_frame_t *f) {
 void sys_ipc_poll(syscall_frame_t *f) {
   uint64_t uaddr = f->rdi;
   uint64_t capacity = f->rsi;
+  uint64_t sender_out = f->rdx;
 
   ipc_msg_t msg;
 
@@ -521,12 +522,26 @@ void sys_ipc_poll(syscall_frame_t *f) {
     return;
   }
 
-  if (msg.size > capacity || copy_to_user_at(current_thread->context->cr3, uaddr, msg.msg, msg.size) != 0) {
+  if (msg.size > capacity) {
     kfree(msg.msg);
     f->rax = 0;
     return;
   }
-  
+
+  if (copy_to_user_at(current_thread->context->cr3, uaddr, msg.msg, msg.size) != 0) {
+    kfree(msg.msg);
+    f->rax = 0;
+    return;
+  }
+
+  if (sender_out) {
+    if (copy_to_user_at(current_thread->context->cr3, sender_out, &msg.sender, sizeof(uint64_t)) != 0) {
+      kfree(msg.msg);
+      f->rax = 0;
+      return;
+    }
+  }
+
   kfree(msg.msg);
   f->rax = msg.size;
 }
@@ -668,12 +683,17 @@ void sys_unmmap_and_free(syscall_frame_t *f) {
 }
 
 void sys_pci_conf_read32(syscall_frame_t *f) {
-  if (f->rdx >= 32 || f->rcx >= 8 || f->r10 >= 253) {
-    f->rax = 0;
+  uint64_t bus = f->rdi;
+  uint64_t dev = f->rsi;
+  uint64_t func = f->rdx;
+  uint64_t offset = f->r10;
+
+  if (bus > 0xFF || dev > 0x1F || func > 0x07 || offset > 0xFC) {
+    f->rax = 0; // not-existent
     return;
   }
 
-  uint32_t address = 0x80000000u | ((uint32_t)f->rdi << 16) | ((uint32_t)f->rdx << 11) | ((uint32_t)f->rcx << 8) | (f->r10 & 0xFC);
+  uint32_t address = 0x80000000u | ((uint32_t)bus << 16) | ((uint32_t)dev << 11) | ((uint32_t)func << 8) | (offset & 0xFC);
   outl(0xCF8, address);
   
   f->rax = inl(0xCFC);
@@ -683,6 +703,10 @@ void syscall_handler(syscall_frame_t *f) {
   if (!f) return;
 
   switch (f->rax) {
+    case SYS_GET_SELF_TID:
+      f->rax = current_thread ? current_thread->tid : 0;
+      break;
+  
     case SYS_EXIT:
       sys_exit(f);
       break;

@@ -23,12 +23,6 @@ extern uint8_t init_blob_end[], init_blob_start[];
 extern uint8_t nvmed_blob_end[], nvmed_blob_start[];
 extern uint8_t npcid_blob_end[], npcid_blob_start[];
 
-void krnl() {
-  for (;;) {
-    hlt();
-  }
-}
-
 static void kload_user_bin(char *path, uint8_t* blob_start, uint8_t* blob_end) {
   uint64_t bin_size = (uint64_t)(blob_end - blob_start);
 
@@ -78,13 +72,6 @@ static void kload_user_bins(void) {
 }
 
 void kuserspace_init() {
-  thread_t *idle = spawn_thread(krnl, read_cr3());
-
-  if (!idle) {
-    kprintferr("Failed to spawn idle thread.", 0x0F);
-    hang();
-  }
-
   uint64_t cr3 = kvmm_create_user_pml4();
 
   if (!cr3) {
@@ -174,9 +161,10 @@ void kuserspace_init() {
   init->context->cs = 0x18 | 3;
   init->context->ss = 0x20 | 3;
   init->context->rsp = USER_STACK_TOP;
-
-  current_thread = init;
   tss.rsp0 = ((uint64_t)init->kernel_stack + 4096 * KERNEL_STACK_SIZE_IN_PAGES);
+   
+  current_thread = init;
+
   switch_context(init->context);
 }
 

@@ -15,7 +15,7 @@ Tested on Linux with GCC 13+ and QEMU 8+.
 Nyvela is kernel-only. Neither the init program nor the shell is in this tree,
 but the kernel needs something to boot into in order to be exercised, so `make`
 reads `nyvela.conf` from the repo root and stops immediately if it is missing or
-incomplete. Six keys, in two groups:
+incomplete. Ten keys, in four groups:
 
 ```make
 INIT_DIR = ../Nyvd
@@ -25,7 +25,17 @@ INIT_BUILD_COMMAND = USER_CFLAGS="-I$(CURDIR)/include" make -C $(INIT_DIR)
 SHELL_DIR = ../nyvsh
 SHELL_BIN_NAME = shell
 SHELL_BUILD_COMMAND = make -C $(SHELL_DIR)
+
+NVMED_DIR = ../nvmed
+NVMED_BIN_NAME = nvmed
+
+NPCID_DIR = ../npcid
+NPCID_BIN_NAME = npcid
 ```
+
+Every one of the ten is **required**. `make` checks each with `ifndef` and
+`$(error)`, so there are no defaults to fall back on. Each error message names
+the key that is actually missing.
 
 | key | meaning |
 |-----|---------|
@@ -35,11 +45,27 @@ SHELL_BUILD_COMMAND = make -C $(SHELL_DIR)
 | `SHELL_DIR` | directory of the shell project |
 | `SHELL_BIN_NAME` | base name of its flat binary; `make` expects `$(SHELL_DIR)/build/$(SHELL_BIN_NAME).bin` |
 | `SHELL_BUILD_COMMAND` | command that rebuilds it |
+| `NVMED_DIR` | directory of the `nvmed` project |
+| `NVMED_BIN_NAME` | base name of its flat binary; published as `/bin/nvmed` |
+| `NPCID_DIR` | directory of the `npcid` project |
+| `NPCID_BIN_NAME` | base name of its flat binary; published as `/bin/npcid` |
 
-Both binaries are embedded with `incbin` (`src/user/blobs/init_blob.s` and
-`shell_blob.s`, via `-DINIT_BIN=` and `-DSHELL_BIN=`) and published as `/bin/init`
-and `/bin/sh` at boot. Nothing from either project is expected to end up in this
-repository; each only has to produce a working flat binary.
+The `NVMED_*` and `NPCID_*` pairs differ from the other two in one way: they have
+no `*_BUILD_COMMAND` key. Those projects are built by a plain recursive
+`$(MAKE) -C $(DIR)`, so the two keys are only the directory and the binary name.
+
+All four binaries are embedded with `incbin` (`src/user/blobs/*_blob.s`, via
+`-D<NAME>_BIN=`) and published into ramfs at boot:
+
+| blob | published as |
+|------|--------------|
+| `init_blob.s` | `/bin/init` |
+| `shell_blob.s` | `/bin/sh` |
+| `nvmed_blob.s` | `/bin/nvmed` |
+| `npcid_blob.s` | `/bin/npcid` |
+
+Nothing from any of the four projects is expected to end up in this repository;
+each only has to produce a working flat binary.
 
 `INIT_BUILD_COMMAND` must forward `USER_CFLAGS`, if the init project includes
 Nyvela headers (`<nyvela/user/syslib.h>`) and only learns the include path from
@@ -69,14 +95,14 @@ $(INIT_BIN): nyvela.conf $(INIT_INPUTS)
 If you add a source root to your init project, add it to `INIT_INPUTS` too, or
 that root becomes invisible to the dependency graph.
 
-### nvmed
+### nvmed and npcid
 
-`nvmed` is a second out-of-tree user program, embedded as `/bin/nvmed`. It has no
-`nyvela.conf` keys; the makefile defaults locate it and can be overridden:
+`nvmed` and `npcid` are further out-of-tree user programs, embedded as
+`/bin/nvmed` and `/bin/npcid`. Both are located by the `NVMED_*` and `NPCID_*`
+keys described above, and both are rebuilt by a recursive `make`:
 
 ```make
-NVMED_DIR ?= ../nvmed
-NVMED_BIN_NAME ?= nvmed
+NVMED_BIN := $(NVMED_DIR)/build/$(NVMED_BIN_NAME).bin
 NVMED_INPUTS := $(shell find $(NVMED_DIR)/src $(NVMED_DIR)/include -type f 2>/dev/null) \
                 $(NVMED_DIR)/makefile $(NVMED_DIR)/linker.ld
 
@@ -87,11 +113,17 @@ $(NVMED_BLOB_O): $(NVMED_BLOB_S) $(NVMED_BIN)
 	$(AS) $(ASFLAGS) -DNVMED_BIN=\"$(abspath $(NVMED_BIN))\" $< -o $@
 ```
 
-The `-D` is load-bearing. An `incbin` of a relative path is resolved by `nasm`
-relative to the `.s` file and carries no timestamp, so the blob object stays
-valid no matter what the binary on disk contains - which is how an edited nvmed
-kept booting as its previous build. Passing the absolute path through a define
-ties the object to the binary, and the binary to its sources.
+`npcid` is identical with `NPCID` substituted. The `-D` is load-bearing in both.
+An `incbin` of a relative path is resolved by `nasm` relative to the `.s` file and
+carries no timestamp, so the blob object stays valid no matter what the binary on
+disk contains - which is how an edited `nvmed` kept booting as its previous build.
+Passing the absolute path through a define ties the object to the binary, and the
+binary to its sources.
+
+Watch the variable names when copying one block to the other. A `NPCID_INPUTS:`
+line that mistakenly assigns `NVMED_INPUTS` compiles fine and leaves `npcid` with
+no prerequisites at all, so it is rebuilt only when the file is missing and
+`npcid.bin` edits silently boot the previous build.
 
 `SHELL_BIN` has no prerequisites at all, so it is rebuilt only when it is
 missing. That is fine for the out-of-tree shell, which has no source vendored
@@ -126,6 +158,30 @@ Image assembly and padding:
 cat $(BOOT) $(STAGE1) $(STAGE2) $(KERNEL) > $@
 truncate -s $$(( ( $(KERNEL_LBA) + $(KERNEL_SECTORS) ) * 512 )) $@
 ```
+
+## Emulated hardware
+
+`run` and `debug` both attach an NVMe controller, so the `nvmed` and `npcid`
+projects have a PCI device to enumerate:
+
+```make
+QEMU_DEVICES := \
+	-drive if=none,id=nvme0,file=/dev/null,format=raw \
+	-device nvme,drive=nvme0,serial=nyvela0
+```
+
+`if=none` keeps the backend off the emulated machine's IDE/SATA controller - it
+is attached only to the `nvme` device. The backing file is `/dev/null`: the
+controller is present for enumeration and config-space reads, and every I/O
+against it fails.
+
+`serial` is required. QEMU 11 refuses to start an `nvme` device without one:
+
+```
+qemu-system-x86_64: -device nvme,drive=nvme0: serial property not set
+```
+
+Do not drop it when overriding `QEMU_DEVICES` on the command line.
 
 ## Toolchains
 

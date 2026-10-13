@@ -179,7 +179,13 @@ switch_context:
   .ring3:
     push qword [rdi + 152] ; ss
     push qword [rdi + 56] ; rsp 
-    push qword [rdi + 136] ; rflags
+    
+    ; normalise rflags
+    mov rax, [rdi + 136]
+    and rax, 0x37FFD7
+    or rax, 2
+
+    push rax
     push qword [rdi + 144] ; cs
     push qword [rdi + 128] ; rip
 
@@ -202,13 +208,15 @@ switch_context:
 
   iretq
 
-  ; iretq chooses between a 3- and 5-qword pop by comparing the restored CS RPL
-  ; with the current CPL, so a same-privilege return is ambiguous across CPUs and
-  ; emulators. Returning to ring0 never changes privilege, so build no frame:
-  ; retq supplies RIP and popfq supplies RFLAGS. Kernel CS/SS are already loaded.
   .ring0:
     mov rsp, [rdi + 56]
     push qword [rdi + 128] ; return address for the ret below
+    
+    ; normalise rflags
+    mov rax, [rdi + 136]
+    and rax, 0x37FFD7
+    or rax, 2
+    push rax
 
     mov r15, [rdi + 120]
     mov r14, [rdi + 112]
@@ -226,8 +234,7 @@ switch_context:
     mov rsi, [rdi + 16]
     mov rax, [rdi]
 
-    push qword [rdi + 136] ; rflags is restored as late as possible: only the
-    popfq                  ; reload of rdi and the ret below are left interruptible
+    popfq ; consumes the normalised rflags pushed at the top
     mov rdi, [rdi + 8]
 
   ret

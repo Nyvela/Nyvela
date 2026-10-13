@@ -33,11 +33,11 @@ $(error NVMED_DIR is not configured. (see nyvela.conf))
 endif
 
 ifndef NVMED_BIN_NAME
-$(error NPCID_BIN_NAME is not configured. (see nyvela.conf))
+$(error NVMED_BIN_NAME is not configured. (see nyvela.conf))
 endif
 
 ifndef NPCID_DIR
-$(error NVMED_DIR is not configured. (see nyvela.conf))
+$(error NPCID_DIR is not configured. (see nyvela.conf))
 endif
 
 ifndef NPCID_BIN_NAME
@@ -55,7 +55,7 @@ NVMED_INPUTS := $(shell find $(NVMED_DIR)/src $(NVMED_DIR)/include -type f 2>/de
 
 NPCID_BIN := $(NPCID_DIR)/build/$(NPCID_BIN_NAME).bin
 NPCID_INPUTS := $(shell find $(NPCID_DIR)/src $(NPCID_DIR)/include -type f 2>/dev/null) \
-                $(NVMED_DIR)/makefile $(NPCID_DIR)/linker.ld
+                $(NPCID_DIR)/makefile $(NPCID_DIR)/linker.ld
 
 CC := gcc
 AS := nasm
@@ -194,15 +194,21 @@ $(IMAGE): $(BOOT) $(STAGE1) $(STAGE2) $(KERNEL)
 	cat $(BOOT) $(STAGE1) $(STAGE2) $(KERNEL) > $@
 	@truncate -s $$(( ( $(KERNEL_LBA) + $(KERNEL_SECTORS) ) * 512 )) $@
 
+QEMU_DEVICES := \
+	-drive if=none,id=nvme0,file=/dev/null,format=raw \
+	-device nvme,drive=nvme0,serial=nyvela0
+
 run: $(IMAGE)
 	qemu-system-x86_64 \
 		-drive format=raw,file=$(IMAGE) \
+		$(QEMU_DEVICES) \
 		-d int,cpu_reset,guest_errors \
 		-no-reboot -no-shutdown
 
 debug: $(IMAGE)
 	qemu-system-x86_64 \
 		-drive format=raw,file=$(IMAGE) \
+		$(QEMU_DEVICES) \
 		-d int,cpu_reset,guest_errors \
 		-D qemu.log \
 		-no-reboot -no-shutdown \

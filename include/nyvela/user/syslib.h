@@ -34,6 +34,7 @@
 #define SYS_UNMMAP_AND_FREE 44ULL
 #define SYS_MAP_MMIO 45ULL // privileged
 #define SYS_PCI_CONF_READ32 46ULL // privileged
+#define SYS_GET_SELF_TID 47ULL
 
 #define USER_CODE_VIRT 0x400000ULL
 #define USER_STACK_TOP 0x450000ULL
@@ -103,6 +104,18 @@ static inline int64_t sys_fs_list(const char *path, char *buf, uint64_t len) {
 
 static inline int64_t sys_exec(const char *path) {
   return (int64_t)sys_call(SYS_EXEC, (uint64_t)path, 0, 0, 0);
+}
+
+static inline int64_t sys_ipc_send(uint64_t target, const void *msg, uint64_t len) {
+  return (int64_t)sys_call(SYS_IPC_SEND, target, (uint64_t)msg, len, 0);
+}
+
+static inline uint64_t sys_get_self_tid(void) {
+  return (uint64_t)sys_call(SYS_GET_SELF_TID, 0, 0, 0, 0);
+}
+
+static inline int64_t sys_ipc_poll(void *buf, uint64_t capacity, uint64_t *sender_out) {
+  return (int64_t)sys_call(SYS_IPC_POLL, (uint64_t)buf, capacity, (uint64_t)sender_out, 0);
 }
 
 static inline size_t ustrlen(const char *s) {
