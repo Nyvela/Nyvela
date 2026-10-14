@@ -211,10 +211,10 @@ switch_context:
   .ring0:
     mov rsp, [rdi + 56]
     push qword [rdi + 128] ; return address for the ret below
-    
-    ; normalise rflags
+
     mov rax, [rdi + 136]
     and rax, 0x37FFD7
+    and rax, 0xFFFFFFFFFFFFFDFF ; clear IF
     or rax, 2
     push rax
 
@@ -234,7 +234,8 @@ switch_context:
     mov rsi, [rdi + 16]
     mov rax, [rdi]
 
-    popfq ; consumes the normalised rflags pushed at the top
+    popfq ; consumes the normalised rflags pushed at the top 
     mov rdi, [rdi + 8]
 
+    sti
   ret

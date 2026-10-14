@@ -158,6 +158,38 @@ static void sys_exit(syscall_frame_t *f) {
   for (;;) __asm__ volatile ("hlt");
 }
 
+extern char syscall_return[];
+
+static void sys_yield(syscall_frame_t *f) {
+  thread_t *next = scheduler_next();
+
+  if (!next || next == current_thread || next->state != THREAD_READY) {
+    // Nothing else to run
+    f->rax = 0;
+    return;
+  }
+
+  f->rax = 0;
+
+  context_t *ctx = current_thread->context;
+
+  ctx->rsp = (uint64_t)f;
+  ctx->rip = (uint64_t)syscall_return;
+  ctx->rflags = read_flags();
+  ctx->cs = GDT_KCODE_LM_SEGMENT;
+  ctx->ss = GDT_KDATA_SEGMENT;
+
+  current_thread = next;
+
+  if (next->kernel_stack) {
+    tss.rsp0 = ((uint64_t)next->kernel_stack + 4096 * KERNEL_STACK_SIZE_IN_PAGES);
+  }
+
+  switch_context(next->context);
+
+  __builtin_unreachable();
+}
+
 static void sys_fs_size(syscall_frame_t *f) {
   char path[SYSCALL_MAX_PATH + 1];
 
@@ -716,7 +748,7 @@ void syscall_handler(syscall_frame_t *f) {
       break;
 
     case SYS_YIELD:
-      f->rax = 0;
+      sys_yield(f);
       break;
 
     case SYS_READ:

@@ -24,6 +24,7 @@ section .text
   extern fault_dump
 
   global isr_syscall
+  global syscall_return
   extern syscall_handler
 
   extern kprintferr
@@ -116,6 +117,7 @@ isr_syscall:
   mov rdi, rsp
   call syscall_handler
 
+syscall_return:
   pop r15
   pop r14
   pop r13
