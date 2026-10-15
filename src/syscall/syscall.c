@@ -334,6 +334,7 @@ static void sys_exec(syscall_frame_t *f) {
 
   if (!cr3) {
     f->rax = (uint64_t)(int64_t)VFS_ERR_NOSPACE;
+    sti();
     return;
   }
 
@@ -580,6 +581,12 @@ void sys_ipc_poll(syscall_frame_t *f) {
 
 void sys_as_create(syscall_frame_t* f) {
   addrspace_t *as = kaddrspace_create();
+
+  if (!as) {
+    f->rax = 0;
+    return;
+  }
+
   f->rax = as->id;
 }
 
@@ -621,6 +628,11 @@ void sys_create_thread(syscall_frame_t* f) {
   }
 
   thread_t *t = spawn_thread((void (*)(void))f->rdi, as->cr3);
+
+  if (!t) {
+    f->rax = 0;
+    return;
+  }
 
   t->context->cs = 0x18 | 3;
   t->context->ss = 0x20 | 3;

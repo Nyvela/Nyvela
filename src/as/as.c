@@ -29,6 +29,7 @@ addrspace_t* kaddrspace_create() {
 
   if (!as->cr3) {
     kfree(as);
+    return NULL;
   }
 
   if (addrspaces_length >= addrspaces_cap) {
