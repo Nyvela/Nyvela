@@ -28,6 +28,10 @@ static bool user_range_ok(uint64_t addr, uint64_t len) {
   return true;
 }
 
+static bool user_page_ok(uint64_t virt) {
+  return user_range_ok(virt, 0) && !is_shared_user_page(virt);
+}
+
 static int copy_user_path(uint64_t uaddr, char *out) {
   if (uaddr < USER_AREA_BASE || uaddr >= USER_AREA_END) return -1;
 
@@ -662,8 +666,13 @@ void sys_alloc_page(syscall_frame_t* f) {
 void sys_mmap(syscall_frame_t* f) {
   uint64_t virt = f->rdi;
   uint64_t phys = f->rsi;
-
+  
   if ((virt | phys) & 0xFFF || !kis_normal_ram(phys)) { 
+    f->rax = 0;
+    return;
+  }
+
+  if (!user_page_ok(virt)) {
     f->rax = 0;
     return;
   }
@@ -672,7 +681,10 @@ void sys_mmap(syscall_frame_t* f) {
 }
 
 void sys_free_thread(syscall_frame_t* f) {
-  if (!f->rdi || f->rdi == current_thread->tid) return;
+  if (!f->rdi || !current_thread || f->rdi == current_thread->tid) {
+    f->rax = (uint64_t)(int64_t)VFS_ERR_INVAL;
+    return;
+  }
   
   thread_t *t = NULL;
 
@@ -688,14 +700,26 @@ void sys_free_thread(syscall_frame_t* f) {
     return;
   }
 
+  for (uint64_t i = 0; i < threads_length; i++) {
+    if (threads[i] == t) {
+      for (uint64_t j = i; j + 1 < threads_length; j++) 
+        threads[j] = threads[j + 1];
+      threads_length--;
+      break;
+    }
+  }
+
   free_thread(t);
   f->rax = 0;
 }
 
 void sys_free_page(syscall_frame_t* f) {
-  if (!f->rdi) return;
+  if (!f->rdi || !user_page_ok(f->rdi)) {
+    f->rax = 0;
+    return;
+  }
   
-  kvmunmap_and_free_at(current_thread->context->cr3, f->rdi);
+  f->rax = kvmunmap_and_free_at(current_thread->context->cr3, f->rdi);
 }
 
 void sys_as_free(syscall_frame_t* f) {
@@ -715,15 +739,22 @@ void sys_as_free(syscall_frame_t* f) {
 }
 
 void sys_unmmap(syscall_frame_t *f) {
-  if (!f->rdi) return;
-
+  if (!f->rdi || !user_page_ok(f->rdi)) {
+    f->rax = 0;
+    return;
+  }
+  
   kvmunmap_at(current_thread->context->cr3, f->rdi);
+  f->rax = 1;
 }
 
 void sys_unmmap_and_free(syscall_frame_t *f) {
-  if (!f->rdi) return;
+  if (!f->rdi || !user_page_ok(f->rdi)) {
+    f->rax = 0;
+    return;
+  }
 
-  kvmunmap_and_free_at(current_thread->context->cr3, f->rdi);
+  f->rax = kvmunmap_and_free_at(current_thread->context->cr3, f->rdi);
 }
 
 void sys_pci_conf_read32(syscall_frame_t *f) {
