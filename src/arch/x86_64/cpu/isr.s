@@ -28,24 +28,27 @@ section .text
   extern syscall_handler
 
   extern kprintferr
+  
+  extern fault_recovery
 
 isr_de:
   mov rdi, 0
   xor rsi, rsi
   xor rdx, rdx
   mov rcx, rsp 
-
-  call fault_dump
+  
+  jmp fault
 
   cli
   hlt
 
 isr_pf:
   pop rsi ; err
-  mov rdi, 8
+  mov rdi, 0x0E
   mov edx, 1
   mov rcx, rsp
-  call fault_dump
+
+  jmp fault
   
   cli
   hlt
@@ -55,7 +58,8 @@ isr_gp:
   mov rdi, 0x0D
   mov edx, 1
   mov rcx, rsp
-  call fault_dump
+
+  jmp fault
   
   cli
   hlt
@@ -69,7 +73,8 @@ isr_ud:
   xor esi, esi
   xor edx, edx
   mov rcx, rsp
-  call fault_dump
+
+  jmp fault
 
   cli
   hlt  
@@ -79,8 +84,9 @@ isr_df:
   mov rdi, 8
   mov edx, 1
   mov rcx, rsp
-  call fault_dump
   
+  jmp fault
+
   cli
   hlt
 
@@ -135,3 +141,19 @@ syscall_return:
   pop rax
 
   iretq
+
+fault:
+  mov r10, [rcx + 8]
+  and r10, 0x03
+
+  cmp r10, 3 ; CPL3
+  je .recover
+
+  call fault_dump
+  
+  cli
+  hlt
+
+  .recover:
+    call fault_recovery
+    iretq
