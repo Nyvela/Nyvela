@@ -647,6 +647,12 @@ void sys_create_thread(syscall_frame_t* f) {
 
 void sys_alloc_page(syscall_frame_t* f) {
   uint64_t virt = user_find_free_page(current_thread->context->cr3);
+
+  if (!virt) {
+    f->rax = 0;
+    return;
+  }
+
   void *page = kpalloc();
 
   if (!page) {
