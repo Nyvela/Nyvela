@@ -35,7 +35,7 @@ addrspace_t* kaddrspace_create() {
   if (addrspaces_length >= addrspaces_cap) {
     uint64_t new_cap = addrspaces_cap * 2;
 
-    void *tmp = krealloc(as, sizeof(addrspace_t*) * new_cap);
+    void *tmp = krealloc(addrspaces, sizeof(addrspace_t*) * new_cap);
 
     if (!tmp) {
       kvmm_free_user_pml4(as->cr3);

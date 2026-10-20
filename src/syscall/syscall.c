@@ -544,7 +544,30 @@ static void sys_fs_list(syscall_frame_t *f) {
 }
 
 void sys_ipc_send(syscall_frame_t *f) {
-  f->rax = kipc_send(f->rdi, (uint8_t*)f->rsi, f->rdx);
+  uint64_t target = f->rdi;
+  uint64_t ubuf = f->rsi;
+  uint64_t size = f->rdx;
+
+  if (size == 0 || size > SYSCALL_MAX_BUF) {
+    f->rax = (uint64_t)(int64_t)VFS_ERR_INVAL;
+    return;
+  }
+
+  char *kbuf = kmalloc(size);
+
+  if (!kbuf) {
+    f->rax = (uint64_t)(int64_t)VFS_ERR_NOSPACE;
+    return;
+  }
+
+  if (copy_from_user(ubuf, kbuf, size) != 0) {
+    kfree(kbuf);
+    f->rax = (uint64_t)(int64_t)VFS_ERR_INVAL;
+    return;
+  }
+
+  f->rax = kipc_send(target, (uint8_t*)kbuf, size);
+  kfree(kbuf);
 }
 
 void sys_ipc_poll(syscall_frame_t *f) {
