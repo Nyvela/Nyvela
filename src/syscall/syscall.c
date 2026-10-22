@@ -709,6 +709,42 @@ void sys_mmap(syscall_frame_t* f) {
   f->rax = kvmmap_at(current_thread->context->cr3, virt, phys, f->rdx & 0x07);
 }
 
+void sys_map_mmio(syscall_frame_t* f) {
+  uint64_t virt = f->rdi;
+  uint64_t phys = f->rsi;
+  uint64_t pages = f->rdx;
+
+  if (!current_thread || !current_thread->context) {
+    f->rax = 0;
+    return;
+  }
+
+  if (!pages || pages > 256 || ((virt | phys) & 0xFFF)) {
+    f->rax = 0;
+    return;
+  }
+
+  if (virt + pages * 0x1000 < virt || phys + pages * 0x1000 < phys || virt + pages * 0x1000 > USER_AREA_END) {
+    f->rax = 0;
+    return;
+  }
+
+  for (uint64_t i = 0; i < pages; i++) {
+    uint64_t *pte = kget_pte_addr_at(current_thread->context->cr3, virt + i * 0x1000);
+
+    if (!user_page_ok(virt + i * 0x1000) || kis_normal_ram(phys + i * 0x1000) || (pte && (*pte & 1))) {
+      f->rax = 0;
+      return;
+    }
+  }
+
+  for (uint64_t i = 0; i < pages; i++) {
+    kvmmap_at(current_thread->context->cr3, virt + i * 0x1000, phys + i * 0x1000, 0x1F);
+  }
+
+  f->rax = virt;
+}
+
 void sys_free_thread(syscall_frame_t* f) {
   if (!f->rdi || !current_thread || f->rdi == current_thread->tid) {
     f->rax = (uint64_t)(int64_t)VFS_ERR_INVAL;
@@ -901,6 +937,10 @@ void syscall_handler(syscall_frame_t *f) {
 
     case SYS_UNMMAP_AND_FREE:
       sys_unmmap_and_free(f);
+      break;
+
+    case SYS_MAP_MMIO:
+      sys_map_mmio(f);
       break;
 
     case SYS_PCI_CONF_READ32:

@@ -102,6 +102,15 @@ static inline int64_t sys_fs_list(const char *path, char *buf, uint64_t len) {
   return (int64_t)sys_call(SYS_FS_LIST, (uint64_t)path, (uint64_t)buf, len, 0);
 }
 
+static inline int64_t sys_map_mmio(uint64_t virt, uint64_t phys, uint64_t pages) {
+  return (int64_t)sys_call(SYS_MAP_MMIO, virt, phys, pages, 0);
+}
+
+static inline uint32_t sys_pci_conf_read32(uint64_t bus, uint64_t dev,
+                                           uint64_t func, uint64_t offset) {
+  return (uint32_t)sys_call(SYS_PCI_CONF_READ32, bus, dev, func, offset);
+}
+
 static inline int64_t sys_exec(const char *path) {
   return (int64_t)sys_call(SYS_EXEC, (uint64_t)path, 0, 0, 0);
 }
