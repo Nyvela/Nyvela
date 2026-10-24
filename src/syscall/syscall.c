@@ -724,7 +724,12 @@ void sys_map_mmio(syscall_frame_t* f) {
     return;
   }
 
-  if (virt + pages * 0x1000 < virt || phys + pages * 0x1000 < phys || virt + pages * 0x1000 > USER_AREA_END) {
+  // Device mappings live above the kernel identity map: below 1 GiB every PTE
+  // is present, and most of those page tables are shared with the kernel.
+  if (virt < USER_MMIO_MIN ||
+      virt + pages * 0x1000 < virt ||
+      virt + pages * 0x1000 > USER_MMIO_MAX ||
+      phys + pages * 0x1000 < phys) {
     f->rax = 0;
     return;
   }
@@ -732,7 +737,7 @@ void sys_map_mmio(syscall_frame_t* f) {
   for (uint64_t i = 0; i < pages; i++) {
     uint64_t *pte = kget_pte_addr_at(current_thread->context->cr3, virt + i * 0x1000);
 
-    if (!user_page_ok(virt + i * 0x1000) || kis_normal_ram(phys + i * 0x1000) || (pte && (*pte & 1))) {
+    if (kis_normal_ram(phys + i * 0x1000) || (pte && (*pte & 1))) {
       f->rax = 0;
       return;
     }

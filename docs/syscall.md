@@ -49,7 +49,7 @@ failure.
 | 42 | `mmap` | `virt`, `phys`, `flags` | maps a page in the caller's address space |
 | 43 | `unmmap` | `virt` | unmaps a page in the caller's address space |
 | 44 | `unmmap_and_free` | `virt` | unmaps and frees a page in the caller's address space |
-| 45 | `map_mmio` | `virt`, `phys`, `pages` | maps `pages` device frames at `virt` with `PWT`/`PCD` set, returns `virt` or 0 |
+| 45 | `map_mmio` | `virt`, `phys`, `pages` | maps `pages` device frames at `virt` with `PWT`/`PCD` set; `virt` must be in `USER_MMIO_MIN..USER_MMIO_MAX` (above the 1 GiB identity map); returns `virt` or 0 |
 | 46 | `pci_conf_read32` | `bus`, `dev`, `func`, `offset` | reads a dword from PCI config space |
 | 47 | `get_self_tid` | - | returns the caller's `tid` |
 
