@@ -26,6 +26,8 @@
 #define SYS_AS_CREATE 30ULL
 #define SYS_AS_MAP 31ULL
 #define SYS_AS_FREE 32ULL
+#define SYS_DMA_ALLOC_PAGE 33ULL
+#define SYS_DMA_FREE_PAGE 34ULL
 
 #define SYS_ALLOC_PAGE 40ULL
 #define SYS_FREE_PAGE 41ULL
@@ -128,6 +130,14 @@ static inline uint64_t sys_get_self_tid(void) {
 
 static inline int64_t sys_ipc_poll(void *buf, uint64_t capacity, uint64_t *sender_out) {
   return (int64_t)sys_call(SYS_IPC_POLL, (uint64_t)buf, capacity, (uint64_t)sender_out, 0);
+}
+
+static inline uint64_t sys_dma_alloc_page() {
+  return (uint64_t)sys_call(SYS_DMA_ALLOC_PAGE, 0, 0, 0, 0);
+}
+
+static inline uint64_t sys_dma_free_page(void* page) {
+  return (uint64_t)sys_call(SYS_DMA_FREE_PAGE, (uint64_t)page, 0, 0, 0);
 }
 
 static inline size_t ustrlen(const char *s) {

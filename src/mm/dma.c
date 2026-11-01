@@ -1,13 +1,14 @@
 #include "../../include/nyvela/mm/dma.h"
 #include "../../include/nyvela/mm/pmm.h"
+#include "../../include/nyvela/lib/utils.h"
 
-uint8_t DMA_BITMAP[BITMAP_SIZE];
+uint8_t DMA_BITMAP[DMA_BITMAP_SIZE];
 uint64_t DMA_PAGES = 0;
 
 bool kdma_init() {
-  memset(DMA_BITMAP, 0, BITMAP_SIZE);
+  memset(DMA_BITMAP, 0, DMA_BITMAP_SIZE);
 
-  DMA_PAGES = (uint64_t)kpalloc_contiguous(PAGE_AMOUNT);
+  DMA_PAGES = (uint64_t)kpalloc_contiguous(DMA_PAGE_AMOUNT);
 
   if (!DMA_PAGES) {
     return false;

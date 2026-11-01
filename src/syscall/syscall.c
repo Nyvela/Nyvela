@@ -15,6 +15,7 @@
 #include "../../include/nyvela/arch/x86_64/asm/io.h"
 #include "../../include/nyvela/mm/pmm.h"
 #include "../../include/nyvela/as/as.h"
+#include "../../include/nyvela/mm/dma.h"
 
 extern void switch_context(context_t *context);
 
@@ -692,6 +693,40 @@ void sys_alloc_page(syscall_frame_t* f) {
   f->rax = virt;
 }
 
+void sys_dma_alloc_page(syscall_frame_t* f) {
+  void* dma_page = kdma_palloc();
+
+  if (!dma_page) {
+    f->rax = 0;
+    return;
+  }
+
+  uint64_t offset = (uint64_t)dma_page - DMA_PAGES;
+  uint64_t n = offset / 4096;
+  uint64_t virt = DMA_VIRT_BASE + n * 4096;
+
+  if (!kvmmap_at(current_thread->context->cr3, virt, (uint64_t)dma_page, 0x07)) {
+    kdma_pfree(dma_page);
+    f->rax = 0;
+    return;
+  }
+
+  f->rax = virt;
+}
+
+void sys_dma_free_page(syscall_frame_t* f) {
+  void* dma_virt_page = (void*)f->rdi;
+
+  uint64_t n = ((uint64_t)dma_virt_page - DMA_VIRT_BASE) / 4096; 
+  uint64_t dma_page = DMA_PAGES + n * 4096;
+
+  if (dma_page < DMA_PAGES || dma_page >= DMA_PAGES + (DMA_PAGE_AMOUNT * 4096)) {
+    return;
+  }
+
+  kdma_pfree((void*)dma_page);
+}
+
 void sys_mmap(syscall_frame_t* f) {
   uint64_t virt = f->rdi;
   uint64_t phys = f->rsi;
@@ -726,10 +761,7 @@ void sys_map_mmio(syscall_frame_t* f) {
 
   // Device mappings live above the kernel identity map: below 1 GiB every PTE
   // is present, and most of those page tables are shared with the kernel.
-  if (virt < USER_MMIO_MIN ||
-      virt + pages * 0x1000 < virt ||
-      virt + pages * 0x1000 > USER_MMIO_MAX ||
-      phys + pages * 0x1000 < phys) {
+  if (virt < USER_MMIO_MIN || virt + pages * 0x1000 < virt || virt + pages * 0x1000 > USER_MMIO_MAX || phys + pages * 0x1000 < phys) {
     f->rax = 0;
     return;
   }
@@ -914,6 +946,14 @@ void syscall_handler(syscall_frame_t *f) {
 
     case SYS_AS_FREE:
       sys_as_free(f);
+      break;
+
+    case SYS_DMA_ALLOC_PAGE:
+      sys_dma_alloc_page(f);
+      break;
+
+    case SYS_DMA_FREE_PAGE:
+      sys_dma_free_page(f);
       break;
     
     case SYS_CREATE_THREAD:
