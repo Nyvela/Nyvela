@@ -701,13 +701,20 @@ void sys_dma_alloc_page(syscall_frame_t* f) {
     return;
   }
 
-  uint64_t offset = (uint64_t)dma_page - DMA_PAGES;
+  uint64_t phys = (uint64_t)dma_page;
+
+  uint64_t offset = phys - DMA_PAGES;
   uint64_t n = offset / 4096;
   uint64_t virt = DMA_VIRT_BASE + n * 4096;
 
-  if (!kvmmap_at(current_thread->context->cr3, virt, (uint64_t)dma_page, 0x07)) {
+  if (!kvmmap_at(current_thread->context->cr3, virt, phys, 0x07)) {
     kdma_pfree(dma_page);
     f->rax = 0;
+    return;
+  }
+
+  if (copy_to_user(f->rdi, &phys, sizeof(phys)) != 0) {
+    // TODO: rollback
     return;
   }
 

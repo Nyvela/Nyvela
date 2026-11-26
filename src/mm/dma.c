@@ -24,7 +24,10 @@ void* kdma_palloc() {
 
     if (!(DMA_BITMAP[byte] & mask)) {
       DMA_BITMAP[byte] |= mask;
-      return (void*)(DMA_PAGES + (4096 * i));
+      void* page = (void*)(DMA_PAGES + (4096 * i));
+      memset(page, 0, 4096);
+
+      return page;
     }
   }
 

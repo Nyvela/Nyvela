@@ -132,8 +132,8 @@ static inline int64_t sys_ipc_poll(void *buf, uint64_t capacity, uint64_t *sende
   return (int64_t)sys_call(SYS_IPC_POLL, (uint64_t)buf, capacity, (uint64_t)sender_out, 0);
 }
 
-static inline uint64_t sys_dma_alloc_page() {
-  return (uint64_t)sys_call(SYS_DMA_ALLOC_PAGE, 0, 0, 0, 0);
+static inline uint64_t sys_dma_alloc_page(uint64_t *phys) {
+  return (uint64_t)sys_call(SYS_DMA_ALLOC_PAGE, (uint64_t)phys, 0, 0, 0);
 }
 
 static inline uint64_t sys_dma_free_page(void* page) {

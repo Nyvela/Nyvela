@@ -16,6 +16,7 @@
 #include "../../include/nyvela/drivers/kbd/kbd.h"
 #include "../../include/nyvela/ktests/ktests.h"
 #include "../../include/nyvela/drivers/video/vga/vga.h"
+#include "../../include/nyvela/mm/dma.h"
 
 extern uint8_t shell_blob_end[], shell_blob_start[];
 extern uint8_t hello_blob_end[], hello_blob_start[];
@@ -193,6 +194,13 @@ void kmain() {
   }
   
   kprintsucc("VMM ready.", 0x0F);
+  
+  if (!kdma_init()) {
+    kprintferr("DMA initialization failed.", 0x0F);
+    hang();
+  }
+
+  kprintsucc("DMA allocator ready.", 0x0F);
 
   ktest_palloc();
   ktest_vmmap();
