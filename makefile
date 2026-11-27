@@ -61,6 +61,7 @@ CC := gcc
 AS := nasm
 LD := ld
 OBJCOPY := objcopy
+RUSTC ?= rustc
 
 SRC_DIR := src
 BUILD := build
@@ -80,12 +81,12 @@ IMAGE := $(BUILD)/os.img
 KERNEL_SECTORS = $(shell s=$$(stat -c%s $(KERNEL)); echo $$(( (s + 511) / 512 )))
 KERNEL_LBA := 37
 
-CFLAGS := -ffreestanding -m64 -mno-red-zone \
+CFLAGS := -std=gnu2x -ffreestanding -m64 -mno-red-zone \
           -fno-stack-protector -fno-pie \
           -Wall -Wextra \
           -Iinclude -g
 
-USER_CFLAGS := -ffreestanding -m64 -mno-red-zone \
+USER_CFLAGS := -std=gnu2x -ffreestanding -m64 -mno-red-zone \
           -fno-stack-protector -fno-pie -fno-pic \
           -ffunction-sections -fdata-sections \
           -Wall -Wextra \
@@ -122,6 +123,12 @@ C_OBJ := $(patsubst $(SRC_DIR)/%.c,$(BUILD)/%.o,$(KERNEL_C_SRC))
 ASM_OBJ := $(patsubst $(SRC_DIR)/%.s,$(BUILD)/%.o,$(KERNEL_ASM_SRC))
 
 KERNEL_OBJ := $(C_OBJ) $(ASM_OBJ)
+RUST_DIR := $(SRC_DIR)/kernel/rust
+RUST_LIB := $(BUILD)/kernel/libnyvela_rust.a
+RUST_DEP := $(BUILD)/kernel/libnyvela_rust.d
+RUST_FLAGS := --edition=2024 --target=x86_64-unknown-none --crate-type=staticlib \
+              -C panic=abort -C opt-level=s -C no-redzone=yes \
+              -C relocation-model=static -C code-model=small
 
 .PHONY: all clean run debug build-init
 
@@ -184,9 +191,17 @@ $(NPCID_BLOB_O): $(NPCID_BLOB_S) $(NPCID_BIN)
 	@mkdir -p $(dir $@)
 	$(AS) $(ASFLAGS) -DNPCID_BIN=\"$(abspath $(NPCID_BIN))\" $< -o $@
 
-$(KERNEL): $(KERNEL_OBJ)
+$(BUILD)/kernel/kernel.o: include/nyvela/kernel/rust.h
+
+$(RUST_LIB): $(RUST_DIR)/lib.rs makefile
 	@mkdir -p $(dir $@)
-	$(LD) $(LDFLAGS) -o $(BUILD)/kernel.elf $(KERNEL_OBJ)
+	$(RUSTC) $(RUST_FLAGS) --crate-name nyvela_kernel --emit=link,dep-info=$(RUST_DEP) $< -o $@
+
+-include $(RUST_DEP)
+
+$(KERNEL): $(KERNEL_OBJ) $(RUST_LIB) linker.ld makefile
+	@mkdir -p $(dir $@)
+	$(LD) $(LDFLAGS) --gc-sections -o $(BUILD)/kernel.elf $(KERNEL_OBJ) $(RUST_LIB)
 	$(OBJCOPY) -O binary $(BUILD)/kernel.elf $@
 
 $(IMAGE): $(BOOT) $(STAGE1) $(STAGE2) $(KERNEL)

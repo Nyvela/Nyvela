@@ -1,6 +1,6 @@
 # Nyvela
 
-A simple 64-bit operating system made from scratch in x86-64 assembly and C.
+A simple 64-bit operating system written in x86-64 assembly, C, and Rust.
 
 Nyvela boots off a raw disk image through a three-stage bootloader, walks the CPU
 from real mode to long mode, sets up paging, and lands in a freestanding kernel
@@ -24,7 +24,9 @@ no SMP, no persistent filesystem, no ELF loader.
 
 ## Quick start
 
-You need `gcc`, `nasm`, `ld`, `objcopy`, `make`, and `qemu-system-x86_64`.
+You need `gcc` with C23 support, `nasm`, `ld`, `objcopy`, `make`,
+`qemu-system-x86_64`, and Rust 1.85 or later. Install the freestanding Rust
+target with `rustup target add x86_64-unknown-none`.
 
 One bit of setup first. This repo is kernel-only, so `make` expects a
 `nyvela.conf` pointing at the two userspace programs it boots into: an init
@@ -44,6 +46,9 @@ SHELL_BUILD_COMMAND = make -C $(SHELL_DIR)
 
 NVMED_DIR = ../nvmed
 NVMED_BIN_NAME = nvmed
+
+NPCID_DIR = ../npcid
+NPCID_BIN_NAME = npcid
 ```
 
 Then:
