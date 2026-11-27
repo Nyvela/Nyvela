@@ -105,7 +105,8 @@ keys described above, and both are rebuilt by a recursive `make`:
 ```make
 NVMED_BIN := $(NVMED_DIR)/build/$(NVMED_BIN_NAME).bin
 NVMED_INPUTS := $(shell find $(NVMED_DIR)/src $(NVMED_DIR)/include -type f 2>/dev/null) \
-                $(NVMED_DIR)/makefile $(NVMED_DIR)/linker.ld
+                $(NVMED_DIR)/makefile $(NVMED_DIR)/linker.ld \
+                $(wildcard $(NVMED_DIR)/Cargo.toml $(NVMED_DIR)/Cargo.lock)
 
 $(NVMED_BIN): $(NVMED_INPUTS)
 	@$(MAKE) -C $(NVMED_DIR)
@@ -162,19 +163,19 @@ truncate -s $$(( ( $(KERNEL_LBA) + $(KERNEL_SECTORS) ) * 512 )) $@
 
 ## Emulated hardware
 
-`run` and `debug` both attach an NVMe controller, so the `nvmed` and `npcid`
-projects have a PCI device to enumerate:
+`run` and `debug` both attach an NVMe controller with a writable test namespace.
+The first run creates a sparse 64 MiB image. Use `QEMU_NVME_IMAGE` to select a
+different image.
 
 ```make
+QEMU_NVME_IMAGE ?= $(BUILD)/nvme.img
 QEMU_DEVICES := \
-	-drive if=none,id=nvme0,file=/dev/null,format=raw \
+	-drive if=none,id=nvme0,file=$(QEMU_NVME_IMAGE),format=raw \
 	-device nvme,drive=nvme0,serial=nyvela0
 ```
 
-`if=none` keeps the backend off the emulated machine's IDE/SATA controller - it
-is attached only to the `nvme` device. The backing file is `/dev/null`: the
-controller is present for enumeration and config-space reads, and every I/O
-against it fails.
+`if=none` attaches the image exclusively to the NVMe controller. Writes to the
+namespace persist in the image across runs.
 
 `serial` is required. QEMU 11 refuses to start an `nvme` device without one:
 

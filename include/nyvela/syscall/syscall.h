@@ -36,6 +36,10 @@
 #define SYS_MAP_MMIO 45ULL // privileged
 #define SYS_PCI_CONF_READ32 46ULL // privileged
 #define SYS_GET_SELF_TID 47ULL
+#define SYS_CLOCK_MS 48ULL
+#define SYS_NVME_CLAIM 49ULL
+
+#define SYS_IPC_MAX_MESSAGE 4112ULL
 
 #define SYSCALL_VECTOR 0x80
 

@@ -51,7 +51,8 @@ INIT_INPUTS := $(shell find $(INIT_DIR)/src $(INIT_DIR)/include -type f 2>/dev/n
 
 NVMED_BIN := $(NVMED_DIR)/build/$(NVMED_BIN_NAME).bin
 NVMED_INPUTS := $(shell find $(NVMED_DIR)/src $(NVMED_DIR)/include -type f 2>/dev/null) \
-                $(NVMED_DIR)/makefile $(NVMED_DIR)/linker.ld
+                $(NVMED_DIR)/makefile $(NVMED_DIR)/linker.ld \
+                $(wildcard $(NVMED_DIR)/Cargo.toml $(NVMED_DIR)/Cargo.lock)
 
 NPCID_BIN := $(NPCID_DIR)/build/$(NPCID_BIN_NAME).bin
 NPCID_INPUTS := $(shell find $(NPCID_DIR)/src $(NPCID_DIR)/include -type f 2>/dev/null) \
@@ -209,18 +210,24 @@ $(IMAGE): $(BOOT) $(STAGE1) $(STAGE2) $(KERNEL)
 	cat $(BOOT) $(STAGE1) $(STAGE2) $(KERNEL) > $@
 	@truncate -s $$(( ( $(KERNEL_LBA) + $(KERNEL_SECTORS) ) * 512 )) $@
 
+QEMU_NVME_IMAGE ?= $(BUILD)/nvme.img
+
 QEMU_DEVICES := \
-	-drive if=none,id=nvme0,file=/dev/null,format=raw \
+	-drive if=none,id=nvme0,file=$(QEMU_NVME_IMAGE),format=raw \
 	-device nvme,drive=nvme0,serial=nyvela0
 
-run: $(IMAGE)
+$(QEMU_NVME_IMAGE):
+	@mkdir -p $(dir $@)
+	truncate -s 64M $@
+
+run: $(IMAGE) $(QEMU_NVME_IMAGE)
 	qemu-system-x86_64 \
 		-drive format=raw,file=$(IMAGE) \
 		$(QEMU_DEVICES) \
 		-d int,cpu_reset,guest_errors \
 		-no-reboot -no-shutdown
 
-debug: $(IMAGE)
+debug: $(IMAGE) $(QEMU_NVME_IMAGE)
 	qemu-system-x86_64 \
 		-drive format=raw,file=$(IMAGE) \
 		$(QEMU_DEVICES) \

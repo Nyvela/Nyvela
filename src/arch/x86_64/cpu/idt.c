@@ -50,7 +50,10 @@ void lidt(idtr_t idtr) {
   desc_lidt(&idtr);
 }
 
+volatile uint64_t lapic_ticks_ms;
+
 void isr_lapic_timer_handler() {
+  lapic_ticks_ms++;
   klapic_eoi();
   scheduler_tick();
 }

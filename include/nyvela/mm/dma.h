@@ -3,7 +3,7 @@
 
 #include <stdint.h>
 
-#define DMA_VIRT_BASE 0xFFFF800000500000ULL
+#define DMA_VIRT_BASE 0x80000000ULL
 #define DMA_BITMAP_SIZE 128
 
 #define DMA_PAGE_AMOUNT 16

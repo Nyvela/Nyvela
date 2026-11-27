@@ -1,5 +1,6 @@
 #include "../../include/nyvela/mm/vmm.h"
 #include "../../include/nyvela/mm/pmm.h"
+#include "../../include/nyvela/mm/dma.h"
 #include "../../include/nyvela/drivers/video/console/console.h"
 #include "../../include/nyvela/arch/x86_64/asm/cpu.h"
 #include "../../include/nyvela/lib/utils.h"
@@ -298,6 +299,9 @@ uint64_t kvmm_create_user_pml4(void) {
   uint64_t *new_pdpt = (uint64_t*)new_pdpt_phys;
 
   memcpy(new_pdpt, old_pdpt, 0x1000);
+  // Each address space maps its own devices and DMA pages.
+  new_pdpt[USER_MMIO_MIN >> 30] = 0;
+  new_pdpt[DMA_VIRT_BASE >> 30] = 0;
 
   uint64_t new_pd_phys = (uint64_t)kpalloc();
   
@@ -524,6 +528,16 @@ void kvmm_free_user_pml4(uint64_t pml4_phys) {
     kpfree(pt3);
   }
   
+  for (uint64_t index = USER_MMIO_MIN >> 30; index <= DMA_VIRT_BASE >> 30; index++) {
+    if (!(pdpt[index] & 1)) continue;
+    uint64_t *device_pd = (void*)(pdpt[index] & ~0xFFFULL);
+    for (uint64_t i = 0; i < 512; i++) {
+      if (device_pd[i] & 1) kpfree((void*)(device_pd[i] & ~0xFFFULL));
+    }
+    // Device memory is external. DMA pages may still be in use after a crash.
+    kpfree(device_pd);
+  }
+
   kpfree(pd);
   kpfree(pdpt);
   kpfree((void*)pml4_phys);
