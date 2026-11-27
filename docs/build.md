@@ -282,12 +282,18 @@ project, not here.
 ## Rust in the kernel
 
 Install Rust 1.85 or later with the `x86_64-unknown-none` target
-(`rustup target add x86_64-unknown-none`). The normal `make` build compiles
-`src/kernel/rust/lib.rs` into `build/kernel/libnyvela_rust.a` and links it into
-`kernel.elf` before producing the flat boot image. The crate uses `core`,
-static addressing and aborting panics. The target uses a soft-float ABI and
-the build disables the red zone. A Rust panic reports a fatal error through
-the C console and halts the CPU.
+(`rustup target add x86_64-unknown-none`). The normal `make` build invokes Cargo
+in `src/kernel/rust` (with its target directory under `build/kernel/cargo`) and
+copies the resulting staticlib to `build/kernel/libnyvela_rust.a` before linking
+it into `kernel.elf`. The crate uses `core`, static addressing and aborting
+panics. The target uses a soft-float ABI and the build disables the red zone.
+A Rust panic reports a fatal error through the C console and halts the CPU.
+
+`cpuinfo.rs` uses the `no_std` `raw-cpuid` crate to collect CPUID data at boot:
+vendor, brand string, family/model/stepping, APIC IDs and APIC features, plus
+physical-core and logical-processor counts with the leaf that supplied them.
+CPUID only describes the boot processor's package; system-wide core enumeration
+requires ACPI/MP table parsing, which the kernel does not do yet.
 
 Use safe Rust interfaces from kernel code. For example, `BootConsole` takes
 borrowed strings and implements `core::fmt::Write` for allocation-free

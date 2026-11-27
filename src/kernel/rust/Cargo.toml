@@ -1,0 +1,15 @@
+[package]
+name = "nyvela_kernel"
+version = "0.1.0"
+edition = "2024"
+
+[lib]
+path = "lib.rs"
+crate-type = ["staticlib"]
+
+[dependencies]
+raw-cpuid = "11.6"
+
+[profile.release]
+panic = "abort"
+opt-level = "s"

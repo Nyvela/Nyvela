@@ -43,8 +43,9 @@ Then `make && make run`. You should reach a `Nyvela >` prompt.
 - **Match the surrounding style.** Indentation, naming, comment density. No
   reformatting unrelated lines in a patch.
 - **Don't add dependencies.** The kernel uses freestanding C, NASM, and `no_std` Rust.
-  Use the existing kernel APIs and Rust `core`. Keep libc, host headers,
-  and external Rust crates out of the kernel.
+  Use the existing kernel APIs and Rust `core`. Keep libc and host headers out
+  of the kernel. The one Rust exception is `raw-cpuid`, used by `cpuinfo.rs` to
+  parse CPUID; any further Rust dependency must stay `no_std` and freestanding.
 
 ## Commit messages
 

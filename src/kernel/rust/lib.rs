@@ -3,6 +3,7 @@
 
 mod bindings;
 mod console;
+mod cpuinfo;
 
 use core::panic::PanicInfo;
 
@@ -25,4 +26,7 @@ pub unsafe extern "C" fn nyvela_rust_init() {
 
 fn start(console: &mut console::BootConsole) {
     console.write("Nyvela Rust kernel ready.\n");
+
+    let info = cpuinfo::collect();
+    cpuinfo::report(console, &info);
 }

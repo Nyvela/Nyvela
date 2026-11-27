@@ -61,7 +61,7 @@ CC := gcc
 AS := nasm
 LD := ld
 OBJCOPY := objcopy
-RUSTC ?= rustc
+CARGO ?= cargo
 
 SRC_DIR := src
 BUILD := build
@@ -125,10 +125,10 @@ ASM_OBJ := $(patsubst $(SRC_DIR)/%.s,$(BUILD)/%.o,$(KERNEL_ASM_SRC))
 KERNEL_OBJ := $(C_OBJ) $(ASM_OBJ)
 RUST_DIR := $(SRC_DIR)/kernel/rust
 RUST_LIB := $(BUILD)/kernel/libnyvela_rust.a
-RUST_DEP := $(BUILD)/kernel/libnyvela_rust.d
-RUST_FLAGS := --edition=2024 --target=x86_64-unknown-none --crate-type=staticlib \
-              -C panic=abort -C opt-level=s -C no-redzone=yes \
-              -C relocation-model=static -C code-model=small
+RUST_CARGO_TARGET := $(BUILD)/kernel/cargo
+RUST_SOURCES := $(shell find $(RUST_DIR) -type f -name '*.rs') \
+                $(RUST_DIR)/Cargo.toml $(RUST_DIR)/Cargo.lock
+RUST_FLAGS := -C no-redzone=yes -C relocation-model=static -C code-model=small
 
 .PHONY: all clean run debug build-init
 
@@ -193,11 +193,11 @@ $(NPCID_BLOB_O): $(NPCID_BLOB_S) $(NPCID_BIN)
 
 $(BUILD)/kernel/kernel.o: include/nyvela/kernel/rust.h
 
-$(RUST_LIB): $(RUST_DIR)/lib.rs makefile
+$(RUST_LIB): $(RUST_SOURCES) makefile
 	@mkdir -p $(dir $@)
-	$(RUSTC) $(RUST_FLAGS) --crate-name nyvela_kernel --emit=link,dep-info=$(RUST_DEP) $< -o $@
-
--include $(RUST_DEP)
+	CARGO_TARGET_DIR=$(abspath $(RUST_CARGO_TARGET)) RUSTFLAGS="$(RUST_FLAGS)" \
+	$(CARGO) build --release --target x86_64-unknown-none --manifest-path $(RUST_DIR)/Cargo.toml
+	cp $(RUST_CARGO_TARGET)/x86_64-unknown-none/release/libnyvela_kernel.a $@
 
 $(KERNEL): $(KERNEL_OBJ) $(RUST_LIB) linker.ld makefile
 	@mkdir -p $(dir $@)
