@@ -82,12 +82,15 @@ IMAGE := $(BUILD)/os.img
 KERNEL_SECTORS = $(shell s=$$(stat -c%s $(KERNEL)); echo $$(( (s + 511) / 512 )))
 KERNEL_LBA := 37
 
-CFLAGS := -std=gnu2x -ffreestanding -m64 -mno-red-zone \
+# Thread contexts do not save floating-point or SIMD registers.
+X86_CFLAGS := -m64 -mno-red-zone -mgeneral-regs-only
+
+CFLAGS := -std=gnu2x -ffreestanding $(X86_CFLAGS) \
           -fno-stack-protector -fno-pie \
           -Wall -Wextra \
           -Iinclude -g
 
-USER_CFLAGS := -std=gnu2x -ffreestanding -m64 -mno-red-zone \
+USER_CFLAGS := -std=gnu2x -ffreestanding $(X86_CFLAGS) \
           -fno-stack-protector -fno-pie -fno-pic \
           -ffunction-sections -fdata-sections \
           -Wall -Wextra \
@@ -135,14 +138,14 @@ RUST_FLAGS := -C no-redzone=yes -C relocation-model=static -C code-model=small
 
 all: $(IMAGE)
 
-$(INIT_BIN): nyvela.conf $(INIT_INPUTS)
+$(INIT_BIN): makefile nyvela.conf $(INIT_INPUTS)
 	$(INIT_BUILD_COMMAND)
 
 $(NVMED_BIN): $(NVMED_INPUTS)
 	@$(MAKE) -C $(NVMED_DIR)
 
-$(NPCID_BIN): $(NPCID_INPUTS)
-	@$(MAKE) -C $(NPCID_DIR)
+$(NPCID_BIN): makefile $(NPCID_INPUTS)
+	@$(MAKE) -B -C $(NPCID_DIR) CC="$(CC) $(X86_CFLAGS)"
 
 $(BOOT): $(BOOT_DIR)/boot.s
 	@mkdir -p $(dir $@)
@@ -156,7 +159,7 @@ $(STAGE2): $(BOOT_DIR)/stage_2.s $(KERNEL)
 	@mkdir -p $(dir $@)
 	$(AS) -f bin -I$(BOOT_DIR)/ -DKERNEL_SECTORS=$(KERNEL_SECTORS) $< -o $@
 
-$(BUILD)/%.o: $(SRC_DIR)/%.c $(INIT_BIN)
+$(BUILD)/%.o: $(SRC_DIR)/%.c $(INIT_BIN) makefile
 	@mkdir -p $(dir $@)
 	$(CC) $(CFLAGS) -c $< -o $@
 
@@ -164,7 +167,7 @@ $(BUILD)/%.o: $(SRC_DIR)/%.s
 	@mkdir -p $(dir $@)
 	$(AS) $(ASFLAGS) $< -o $@
 
-$(USER_HELLO_ELF): $(SRC_DIR)/user/hello/hello.c include/nyvela/user/syslib.h $(SRC_DIR)/user/ld/prog.ld
+$(USER_HELLO_ELF): $(SRC_DIR)/user/hello/hello.c include/nyvela/user/syslib.h $(SRC_DIR)/user/ld/prog.ld makefile
 	@mkdir -p $(dir $@)
 	$(CC) $(USER_CFLAGS) -T $(SRC_DIR)/user/ld/prog.ld $(USER_LDFLAGS) $< -o $@
 
