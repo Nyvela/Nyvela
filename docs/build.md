@@ -7,6 +7,7 @@
 * `ld`, `objcopy`
 * `make`
 * `qemu-system-x86_64`
+* `dosfstools` to create the default FAT32 disk image
 * Rust 1.85+ with the `x86_64-unknown-none` target
 
 Tested on Linux with GCC 13+ and QEMU 8+.
@@ -165,17 +166,20 @@ truncate -s $$(( ( $(KERNEL_LBA) + $(KERNEL_SECTORS) ) * 512 )) $@
 
 ## Emulated hardware
 
-`run` and `debug` both attach an NVMe controller with a writable test namespace.
-The first run creates a sparse 64 MiB image. Use `QEMU_NVME_IMAGE` to select a
-different image.
+`run` and `debug` default to four virtual CPUs and a writable NVMe namespace
+backed by the 64 MiB FAT32 image at `build/fat32.img`. The build uses
+`dosfstools` to create the default image when it is missing. `make fat-image`
+creates that image without starting QEMU.
 
-Use `make fat-image` with `dosfstools` to create `build/fat32.img`, then set
-`QEMU_NVME_IMAGE=build/fat32.img` to attach it. This target creates a volume
-only when the image is missing. Set `QEMU_CPUS` on `run` or `debug` to
-start more than one virtual CPU.
+Set `QEMU_CPUS` to choose a CPU count. Set `QEMU_NVME_IMAGE` to attach a
+different image, such as `make run QEMU_NVME_IMAGE=build/nvme.img` to use the
+original test disk. If an alternate image path is missing, the build creates
+a blank 64 MiB raw image there.
 
 ```make
-QEMU_NVME_IMAGE ?= $(BUILD)/nvme.img
+FAT_IMAGE ?= $(BUILD)/fat32.img
+QEMU_NVME_IMAGE ?= $(FAT_IMAGE)
+QEMU_CPUS ?= 4
 QEMU_DEVICES := \
 	-drive if=none,id=nvme0,file=$(QEMU_NVME_IMAGE),format=raw \
 	-device nvme,drive=nvme0,serial=nyvela0

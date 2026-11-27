@@ -28,7 +28,8 @@ explicitly dispatched Rust kernel jobs. ELF loading is still on the roadmap.
 
 You need `gcc` with C23 support, `nasm`, `ld`, `objcopy`, `make`,
 `qemu-system-x86_64`, and Rust 1.85 or later. Install the freestanding Rust
-target with `rustup target add x86_64-unknown-none`.
+target with `rustup target add x86_64-unknown-none`. Install `dosfstools` to
+create the default FAT32 disk on the first boot.
 
 Clone the userspace dependencies next to the kernel checkout. Point
 `nyvela.conf` at their locations if you use a different directory layout.
@@ -73,17 +74,11 @@ make debug  # boot paused, GDB stub on :1234
 You should land at a `Nyvela >` prompt. Try `help`, `ls`, `cat readme.txt`, and
 `run hello`.
 
-With `dosfstools` installed, create a separate FAT32 image and boot with four
-virtual CPUs.
-
-```sh
-make fat-image
-make run QEMU_CPUS=4 QEMU_NVME_IMAGE=build/fat32.img
-```
-
-At the Nyvela prompt, type `run fat`. Inside `fat`, use `ls`, `cat <path>`,
-`mkdir <path>`, `write <path> <text>`, and `exit`. Changes persist in
-`build/fat32.img`. The image contains a FAT32 volume starting at LBA 0.
+`make run` starts four virtual CPUs and attaches `build/fat32.img` through
+NVMe. The terminal shows the CPU count and `NVMED: ready` once the driver starts.
+At the Nyvela prompt in the QEMU window, type `run fat`. Inside `fat`, use
+`ls`, `cat <path>`, `mkdir <path>`, `write <path> <text>`, and `exit`.
+Changes persist in `build/fat32.img`.
 
 ## Shape of it
 

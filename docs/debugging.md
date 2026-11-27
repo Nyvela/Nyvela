@@ -29,7 +29,8 @@ flag the guest would silently reboot and you would lose the failure.
 
 ## Reading the screen without a display
 
-`make run` opens a window. To capture the console from a headless run:
+`make run` opens a window and mirrors the guest console to the launching
+terminal. To capture VGA memory from a headless run:
 
 ```sh
 qemu-system-x86_64 -drive format=raw,file=build/os.img \

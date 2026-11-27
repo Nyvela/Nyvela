@@ -230,9 +230,9 @@ $(IMAGE): $(BOOT) $(STAGE1) $(STAGE2) $(KERNEL)
 	cat $(BOOT) $(STAGE1) $(STAGE2) $(KERNEL) > $@
 	@truncate -s $$(( ( $(KERNEL_LBA) + $(KERNEL_SECTORS) ) * 512 )) $@
 
-QEMU_NVME_IMAGE ?= $(BUILD)/nvme.img
 FAT_IMAGE ?= $(BUILD)/fat32.img
-QEMU_CPUS ?= 1
+QEMU_NVME_IMAGE ?= $(FAT_IMAGE)
+QEMU_CPUS ?= 4
 
 fat-image: $(FAT_IMAGE)
 
@@ -255,7 +255,7 @@ run: $(IMAGE) $(QEMU_NVME_IMAGE)
 		-smp $(QEMU_CPUS) \
 		-drive format=raw,file=$(IMAGE) \
 		$(QEMU_DEVICES) \
-		-d int,cpu_reset,guest_errors \
+		-serial stdio \
 		-no-reboot -no-shutdown
 
 debug: $(IMAGE) $(QEMU_NVME_IMAGE)
