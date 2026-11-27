@@ -154,7 +154,13 @@ long_mode_enter:
   rep movsq
   
   mov rax, 0x100000
-  jmp rax
+  ; CALL gives kmain the stack alignment required by the x86-64 SysV ABI.
+  call rax
+
+  cli
+.halt:
+  hlt
+  jmp .halt
 
 BITS 32
 

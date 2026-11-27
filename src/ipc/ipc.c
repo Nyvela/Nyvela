@@ -1,6 +1,8 @@
 #include "../../include/nyvela/ipc/ipc.h"
 #include "../../include/nyvela/thread/thread.h"
 #include "../../include/nyvela/mm/heap.h"
+#include "../../include/nyvela/mm/pmm.h"
+#include "../../include/nyvela/syscall/syscall.h"
 #include "../../include/nyvela/lib/utils.h"
 
 bool ipc_grow_queue(ipc_queue_t *queue) {
@@ -25,11 +27,24 @@ bool ipc_grow_queue(ipc_queue_t *queue) {
   return true;
 }
 
-bool kipc_send(uint64_t target, uint8_t* msg, uint64_t size) {
+uint8_t *kipc_alloc_payload(uint64_t size) {
+  if (size <= SYSCALL_MAX_BUF) return kmalloc(size);
+  return kpalloc_contiguous((size + 4095) / 4096);
+}
+
+void kipc_free_message(const ipc_msg_t *msg) {
+  if (msg->size <= SYSCALL_MAX_BUF) {
+    kfree(msg->msg);
+  } else {
+    kpfree_contiguous(msg->msg, (msg->size + 4095) / 4096);
+  }
+}
+
+bool kipc_send(ipc_msg_t msg) {
   thread_t* thread = NULL;
 
   for (uint64_t i = 0; i < threads_length; i++) {
-    if (threads[i]->tid == target) {
+    if (threads[i]->tid == msg.target && threads[i]->state != THREAD_DEAD) {
       thread = threads[i];
       break;
     }
@@ -51,21 +66,7 @@ bool kipc_send(uint64_t target, uint8_t* msg, uint64_t size) {
     }
   }
 
-  uint8_t *copied_msg = kmalloc(size);
-
-  if (!copied_msg) {
-    return false;
-  }
-
-  memcpy(copied_msg, msg, size);
-
-  queue->queue[queue->tail] = (ipc_msg_t){
-    .msg = copied_msg,
-    .size = size,
-    .target = target,
-    .sender = current_thread->tid
-  };
-
+  queue->queue[queue->tail] = msg;
   queue->tail = (queue->tail + 1) % queue->capacity;
   queue->count++;
 

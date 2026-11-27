@@ -44,6 +44,10 @@ ifndef NPCID_BIN_NAME
 $(error NPCID_BIN_NAME is not configured. (see nyvela.conf))
 endif
 
+ifndef FAT_DIR
+$(error FAT_DIR is not configured. (see nyvela.conf))
+endif
+
 INIT_BIN := $(INIT_DIR)/build/$(INIT_BIN_NAME).bin
 SHELL_BIN := $(SHELL_DIR)/build/$(SHELL_BIN_NAME).bin
 INIT_INPUTS := $(shell find $(INIT_DIR)/src $(INIT_DIR)/include -type f 2>/dev/null) \
@@ -51,16 +55,22 @@ INIT_INPUTS := $(shell find $(INIT_DIR)/src $(INIT_DIR)/include -type f 2>/dev/n
 
 NVMED_BIN := $(NVMED_DIR)/build/$(NVMED_BIN_NAME).bin
 NVMED_INPUTS := $(shell find $(NVMED_DIR)/src $(NVMED_DIR)/include -type f 2>/dev/null) \
-                $(NVMED_DIR)/makefile $(NVMED_DIR)/linker.ld
+                $(NVMED_DIR)/makefile $(NVMED_DIR)/linker.ld \
+                $(wildcard $(NVMED_DIR)/Cargo.toml $(NVMED_DIR)/Cargo.lock)
 
 NPCID_BIN := $(NPCID_DIR)/build/$(NPCID_BIN_NAME).bin
 NPCID_INPUTS := $(shell find $(NPCID_DIR)/src $(NPCID_DIR)/include -type f 2>/dev/null) \
                 $(NPCID_DIR)/makefile $(NPCID_DIR)/linker.ld
 
+FAT_BIN := $(FAT_DIR)/build/fat.bin
+FAT_INPUTS := $(wildcard $(FAT_DIR)/src/*.rs) $(FAT_DIR)/Cargo.toml \
+              $(FAT_DIR)/Cargo.lock $(FAT_DIR)/makefile $(FAT_DIR)/linker.ld
+
 CC := gcc
 AS := nasm
 LD := ld
 OBJCOPY := objcopy
+CARGO ?= cargo
 
 SRC_DIR := src
 BUILD := build
@@ -72,6 +82,7 @@ BOOT_DIR := $(ARCH_DIR)/boot
 BOOT := $(BUILD)/boot.bin
 STAGE1 := $(BUILD)/stage_1.bin
 STAGE2 := $(BUILD)/stage_2.bin
+AP_BOOT := $(BUILD)/ap.bin
 KERNEL := $(BUILD)/kernel.bin
 IMAGE := $(BUILD)/os.img
 
@@ -80,12 +91,15 @@ IMAGE := $(BUILD)/os.img
 KERNEL_SECTORS = $(shell s=$$(stat -c%s $(KERNEL)); echo $$(( (s + 511) / 512 )))
 KERNEL_LBA := 37
 
-CFLAGS := -ffreestanding -m64 -mno-red-zone \
+# Thread contexts do not save floating-point or SIMD registers.
+X86_CFLAGS := -m64 -mno-red-zone -mgeneral-regs-only
+
+CFLAGS := -std=gnu2x -ffreestanding $(X86_CFLAGS) \
           -fno-stack-protector -fno-pie \
           -Wall -Wextra \
           -Iinclude -g
 
-USER_CFLAGS := -ffreestanding -m64 -mno-red-zone \
+USER_CFLAGS := -std=gnu2x -ffreestanding $(X86_CFLAGS) \
           -fno-stack-protector -fno-pie -fno-pic \
           -ffunction-sections -fdata-sections \
           -Wall -Wextra \
@@ -122,19 +136,28 @@ C_OBJ := $(patsubst $(SRC_DIR)/%.c,$(BUILD)/%.o,$(KERNEL_C_SRC))
 ASM_OBJ := $(patsubst $(SRC_DIR)/%.s,$(BUILD)/%.o,$(KERNEL_ASM_SRC))
 
 KERNEL_OBJ := $(C_OBJ) $(ASM_OBJ)
+RUST_DIR := $(SRC_DIR)/kernel/rust
+RUST_LIB := $(BUILD)/kernel/libnyvela_rust.a
+RUST_CARGO_TARGET := $(BUILD)/kernel/cargo
+RUST_SOURCES := $(shell find $(RUST_DIR) -type f -name '*.rs') \
+                $(RUST_DIR)/Cargo.toml $(RUST_DIR)/Cargo.lock
+RUST_FLAGS := -C no-redzone=yes -C relocation-model=static -C code-model=small
 
-.PHONY: all clean run debug build-init
+.PHONY: all clean run debug build-init fat-image
 
 all: $(IMAGE)
 
-$(INIT_BIN): nyvela.conf $(INIT_INPUTS)
+$(INIT_BIN): makefile nyvela.conf $(INIT_INPUTS)
 	$(INIT_BUILD_COMMAND)
 
 $(NVMED_BIN): $(NVMED_INPUTS)
 	@$(MAKE) -C $(NVMED_DIR)
 
-$(NPCID_BIN): $(NPCID_INPUTS)
-	@$(MAKE) -C $(NPCID_DIR)
+$(NPCID_BIN): makefile $(NPCID_INPUTS)
+	@$(MAKE) -B -C $(NPCID_DIR) CC="$(CC) $(X86_CFLAGS)"
+
+$(FAT_BIN): $(FAT_INPUTS)
+	@$(MAKE) -C $(FAT_DIR)
 
 $(BOOT): $(BOOT_DIR)/boot.s
 	@mkdir -p $(dir $@)
@@ -148,7 +171,11 @@ $(STAGE2): $(BOOT_DIR)/stage_2.s $(KERNEL)
 	@mkdir -p $(dir $@)
 	$(AS) -f bin -I$(BOOT_DIR)/ -DKERNEL_SECTORS=$(KERNEL_SECTORS) $< -o $@
 
-$(BUILD)/%.o: $(SRC_DIR)/%.c $(INIT_BIN)
+$(AP_BOOT): $(BOOT_DIR)/ap.s
+	@mkdir -p $(dir $@)
+	$(AS) -f bin $< -o $@
+
+$(BUILD)/%.o: $(SRC_DIR)/%.c $(INIT_BIN) makefile
 	@mkdir -p $(dir $@)
 	$(CC) $(CFLAGS) -c $< -o $@
 
@@ -156,7 +183,7 @@ $(BUILD)/%.o: $(SRC_DIR)/%.s
 	@mkdir -p $(dir $@)
 	$(AS) $(ASFLAGS) $< -o $@
 
-$(USER_HELLO_ELF): $(SRC_DIR)/user/hello/hello.c include/nyvela/user/syslib.h $(SRC_DIR)/user/ld/prog.ld
+$(USER_HELLO_ELF): $(SRC_DIR)/user/hello/hello.c include/nyvela/user/syslib.h $(SRC_DIR)/user/ld/prog.ld makefile
 	@mkdir -p $(dir $@)
 	$(CC) $(USER_CFLAGS) -T $(SRC_DIR)/user/ld/prog.ld $(USER_LDFLAGS) $< -o $@
 
@@ -184,9 +211,18 @@ $(NPCID_BLOB_O): $(NPCID_BLOB_S) $(NPCID_BIN)
 	@mkdir -p $(dir $@)
 	$(AS) $(ASFLAGS) -DNPCID_BIN=\"$(abspath $(NPCID_BIN))\" $< -o $@
 
-$(KERNEL): $(KERNEL_OBJ)
+$(BUILD)/kernel/kernel.o: include/nyvela/kernel/rust.h
+
+$(RUST_LIB): $(RUST_SOURCES) $(AP_BOOT) $(FAT_BIN) makefile
 	@mkdir -p $(dir $@)
-	$(LD) $(LDFLAGS) -o $(BUILD)/kernel.elf $(KERNEL_OBJ)
+	CARGO_TARGET_DIR=$(abspath $(RUST_CARGO_TARGET)) RUSTFLAGS="$(RUST_FLAGS)" \
+	NYVELA_AP_BOOT="$(abspath $(AP_BOOT))" NYVELA_FAT_BIN="$(abspath $(FAT_BIN))" \
+	$(CARGO) build --release --target x86_64-unknown-none --manifest-path $(RUST_DIR)/Cargo.toml
+	cp $(RUST_CARGO_TARGET)/x86_64-unknown-none/release/libnyvela_kernel.a $@
+
+$(KERNEL): $(KERNEL_OBJ) $(RUST_LIB) linker.ld makefile
+	@mkdir -p $(dir $@)
+	$(LD) $(LDFLAGS) --gc-sections -o $(BUILD)/kernel.elf $(KERNEL_OBJ) $(RUST_LIB)
 	$(OBJCOPY) -O binary $(BUILD)/kernel.elf $@
 
 $(IMAGE): $(BOOT) $(STAGE1) $(STAGE2) $(KERNEL)
@@ -194,19 +230,37 @@ $(IMAGE): $(BOOT) $(STAGE1) $(STAGE2) $(KERNEL)
 	cat $(BOOT) $(STAGE1) $(STAGE2) $(KERNEL) > $@
 	@truncate -s $$(( ( $(KERNEL_LBA) + $(KERNEL_SECTORS) ) * 512 )) $@
 
+QEMU_NVME_IMAGE ?= $(BUILD)/nvme.img
+FAT_IMAGE ?= $(BUILD)/fat32.img
+QEMU_CPUS ?= 1
+
+fat-image: $(FAT_IMAGE)
+
+$(FAT_IMAGE):
+	@mkdir -p $(dir $@)
+	mkfs.fat -C -F 32 -n NYVELA $@ 65536
+
 QEMU_DEVICES := \
-	-drive if=none,id=nvme0,file=/dev/null,format=raw \
+	-drive if=none,id=nvme0,file=$(QEMU_NVME_IMAGE),format=raw \
 	-device nvme,drive=nvme0,serial=nyvela0
 
-run: $(IMAGE)
+ifneq ($(QEMU_NVME_IMAGE),$(FAT_IMAGE))
+$(QEMU_NVME_IMAGE):
+	@mkdir -p $(dir $@)
+	truncate -s 64M $@
+endif
+
+run: $(IMAGE) $(QEMU_NVME_IMAGE)
 	qemu-system-x86_64 \
+		-smp $(QEMU_CPUS) \
 		-drive format=raw,file=$(IMAGE) \
 		$(QEMU_DEVICES) \
 		-d int,cpu_reset,guest_errors \
 		-no-reboot -no-shutdown
 
-debug: $(IMAGE)
+debug: $(IMAGE) $(QEMU_NVME_IMAGE)
 	qemu-system-x86_64 \
+		-smp $(QEMU_CPUS) \
 		-drive format=raw,file=$(IMAGE) \
 		$(QEMU_DEVICES) \
 		-d int,cpu_reset,guest_errors \

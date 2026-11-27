@@ -26,6 +26,7 @@
 uintptr_t kget_apic_base();
 
 bool kenable_lapic();
+extern volatile uint64_t lapic_ticks_ms;
 bool ksetup_lapic_timer();
 void klapic_eoi();
 

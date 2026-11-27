@@ -22,8 +22,10 @@ SECTIONS
 
   .bss : ALIGN(4096)
   {
+    kernel_bss_start = .;
     *(COMMON)
     *(.bss*)
+    kernel_bss_end = .;
   }
 
   .stack : ALIGN(4096)
@@ -34,4 +36,9 @@ SECTIONS
   }
 
   kernel_end = .;
+
+  /DISCARD/ :
+  {
+    *(.eh_frame .eh_frame.*)
+  }
 }

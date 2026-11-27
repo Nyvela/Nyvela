@@ -6,7 +6,9 @@ misunderstanding.
 
 ## Getting set up
 
-You need `gcc`, `nasm`, `ld`, `objcopy`, `make`, and `qemu-system-x86_64`.
+You need `gcc` with C23 support, `nasm`, `ld`, `objcopy`, `make`,
+`qemu-system-x86_64`, and Rust 1.85 or later. Install the freestanding Rust
+target with `rustup target add x86_64-unknown-none`.
 
 `make` will not run without a `nyvela.conf`. Nyvela is kernel-only, so the
 config points at the two userspace programs it boots into, both outside the
@@ -23,8 +25,11 @@ SHELL_DIR = ../nyvsh
 SHELL_BIN_NAME = shell
 SHELL_BUILD_COMMAND = make -C $(SHELL_DIR)
 
-NVMED_DIR = ../nvmed
+NVMED_DIR = ../nvmed-rs
 NVMED_BIN_NAME = nvmed
+
+NPCID_DIR = ../npcid
+NPCID_BIN_NAME = npcid
 ```
 
 Then `make && make run`. You should reach a `Nyvela >` prompt.
@@ -37,9 +42,10 @@ Then `make && make run`. You should reach a `Nyvela >` prompt.
   reformatting out of feature commits - it makes the diff reviewable.
 - **Match the surrounding style.** Indentation, naming, comment density. No
   reformatting unrelated lines in a patch.
-- **Don't add dependencies.** The kernel is freestanding C and NASM. User
-  programs are freestanding C too, or a `no_std` Rust crate in their own
-  project. No libc, no host headers, no runtime.
+- **Don't add dependencies.** The kernel uses freestanding C, NASM, and `no_std` Rust.
+  Use the existing kernel APIs and Rust `core`. Keep libc and host headers out
+  of the kernel. The one Rust exception is `raw-cpuid`, used by `cpuinfo.rs` to
+  parse CPUID; any further Rust dependency must stay `no_std` and freestanding.
 
 ## Commit messages
 

@@ -95,13 +95,35 @@ isr_lapic_timer:
   mov rdi, rax
   jmp isr_lapic_timer_handler
 
-isr_pit:
-  call isr_pit_handler
+; These IRQs resume the interrupted instruction stream directly. Protect
+; the registers that a SysV C handler may clobber across the call.
+%macro irq_handler 2
+%1:
+  push rax
+  push rcx
+  push rdx
+  push rsi
+  push rdi
+  push r8
+  push r9
+  push r10
+  push r11
+  cld
+  call %2
+  pop r11
+  pop r10
+  pop r9
+  pop r8
+  pop rdi
+  pop rsi
+  pop rdx
+  pop rcx
+  pop rax
   iretq
+%endmacro
 
-isr_kbd:
-  call kbd_irq_handler
-  iretq
+irq_handler isr_pit, isr_pit_handler
+irq_handler isr_kbd, kbd_irq_handler
 
 isr_syscall:
   push rax

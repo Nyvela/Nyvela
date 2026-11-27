@@ -2,38 +2,39 @@
 
 ## Requirements
 
-* `gcc` with x86-64 support and freestanding flags
+* `gcc` with x86-64 and C23 support (GCC 13+)
 * `nasm`
 * `ld`, `objcopy`
 * `make`
 * `qemu-system-x86_64`
+* Rust 1.85+ with the `x86_64-unknown-none` target
 
 Tested on Linux with GCC 13+ and QEMU 8+.
 
 ## nyvela.conf
 
-Nyvela is kernel-only. Neither the init program nor the shell is in this tree,
-but the kernel needs something to boot into in order to be exercised, so `make`
-reads `nyvela.conf` from the repo root and stops immediately if it is missing or
-incomplete. Ten keys, in four groups:
+The userspace programs live in sibling repositories. `make` reads their paths
+and build settings from `nyvela.conf` in the repo root.
 
 ```make
 INIT_DIR = ../Nyvd
 INIT_BIN_NAME = nyvd
-INIT_BUILD_COMMAND = USER_CFLAGS="-I$(CURDIR)/include" make -C $(INIT_DIR)
+INIT_BUILD_COMMAND = USER_CFLAGS="-I$(CURDIR)/include $(X86_CFLAGS)" $(MAKE) -B -C $(INIT_DIR)
 
-SHELL_DIR = ../nyvsh
+SHELL_DIR = ../Nyvsh
 SHELL_BIN_NAME = shell
 SHELL_BUILD_COMMAND = make -C $(SHELL_DIR)
 
-NVMED_DIR = ../nvmed
+NVMED_DIR = ../nvmed-rs
 NVMED_BIN_NAME = nvmed
 
-NPCID_DIR = ../npcid
+NPCID_DIR = ../Npcid
 NPCID_BIN_NAME = npcid
+
+FAT_DIR = ../Nyvfat
 ```
 
-Every one of the ten is **required**. `make` checks each with `ifndef` and
+Each key is required. `make` checks each with `ifndef` and
 `$(error)`, so there are no defaults to fall back on. Each error message names
 the key that is actually missing.
 
@@ -45,17 +46,16 @@ the key that is actually missing.
 | `SHELL_DIR` | directory of the shell project |
 | `SHELL_BIN_NAME` | base name of its flat binary; `make` expects `$(SHELL_DIR)/build/$(SHELL_BIN_NAME).bin` |
 | `SHELL_BUILD_COMMAND` | command that rebuilds it |
-| `NVMED_DIR` | directory of the `nvmed` project |
+| `NVMED_DIR` | directory of the `nvmed-rs` project (Rust NVMe driver) |
 | `NVMED_BIN_NAME` | base name of its flat binary; published as `/bin/nvmed` |
 | `NPCID_DIR` | directory of the `npcid` project |
 | `NPCID_BIN_NAME` | base name of its flat binary; published as `/bin/npcid` |
+| `FAT_DIR` | directory of the Nyvfat checkout, which produces `build/fat.bin` |
 
-The `NVMED_*` and `NPCID_*` pairs differ from the other two in one way: they have
-no `*_BUILD_COMMAND` key. Those projects are built by a plain recursive
-`$(MAKE) -C $(DIR)`, so the two keys are only the directory and the binary name.
+Nyvela invokes recursive builds for nvmed, npcid, and Nyvfat.
 
-All four binaries are embedded with `incbin` (`src/user/blobs/*_blob.s`, via
-`-D<NAME>_BIN=`) and published into ramfs at boot:
+Nyvela embeds the userspace binaries and publishes them into ramfs at boot.
+The assembly blobs use `incbin` and Nyvfat uses Rust's `include_bytes!`.
 
 | blob | published as |
 |------|--------------|
@@ -63,9 +63,9 @@ All four binaries are embedded with `incbin` (`src/user/blobs/*_blob.s`, via
 | `shell_blob.s` | `/bin/sh` |
 | `nvmed_blob.s` | `/bin/nvmed` |
 | `npcid_blob.s` | `/bin/npcid` |
+| `exec.rs` | `/bin/fat` |
 
-Nothing from any of the four projects is expected to end up in this repository;
-each only has to produce a working flat binary.
+Each userspace project provides its own flat binary.
 
 `INIT_BUILD_COMMAND` must forward `USER_CFLAGS`, if the init project includes
 Nyvela headers (`<nyvela/user/syslib.h>`) and only learns the include path from
@@ -88,7 +88,7 @@ So the rule also depends on the init project's own sources:
 INIT_INPUTS := $(shell find $(INIT_DIR)/src $(INIT_DIR)/include -type f 2>/dev/null) \
                $(INIT_DIR)/makefile $(INIT_DIR)/linker.ld
 
-$(INIT_BIN): nyvela.conf $(INIT_INPUTS)
+$(INIT_BIN): makefile nyvela.conf $(INIT_INPUTS)
 	$(INIT_BUILD_COMMAND)
 ```
 
@@ -97,14 +97,18 @@ that root becomes invisible to the dependency graph.
 
 ### nvmed and npcid
 
-`nvmed` and `npcid` are further out-of-tree user programs, embedded as
-`/bin/nvmed` and `/bin/npcid`. Both are located by the `NVMED_*` and `NPCID_*`
-keys described above, and both are rebuilt by a recursive `make`:
+`nvmed` is the userspace NVMe block service from the `nvmed-rs` checkout: a
+`no_std` Rust program whose own `makefile` runs Cargo for the
+`x86_64-unknown-none` target and produces `build/nvmed.bin`. `npcid` remains a C
+program. Both are out-of-tree user programs, embedded as `/bin/nvmed` and
+`/bin/npcid`. Both are located by the `NVMED_*` and `NPCID_*` keys described
+above, and both are rebuilt by a recursive `make`:
 
 ```make
 NVMED_BIN := $(NVMED_DIR)/build/$(NVMED_BIN_NAME).bin
 NVMED_INPUTS := $(shell find $(NVMED_DIR)/src $(NVMED_DIR)/include -type f 2>/dev/null) \
-                $(NVMED_DIR)/makefile $(NVMED_DIR)/linker.ld
+                $(NVMED_DIR)/makefile $(NVMED_DIR)/linker.ld \
+                $(wildcard $(NVMED_DIR)/Cargo.toml $(NVMED_DIR)/Cargo.lock)
 
 $(NVMED_BIN): $(NVMED_INPUTS)
 	@$(MAKE) -C $(NVMED_DIR)
@@ -161,19 +165,24 @@ truncate -s $$(( ( $(KERNEL_LBA) + $(KERNEL_SECTORS) ) * 512 )) $@
 
 ## Emulated hardware
 
-`run` and `debug` both attach an NVMe controller, so the `nvmed` and `npcid`
-projects have a PCI device to enumerate:
+`run` and `debug` both attach an NVMe controller with a writable test namespace.
+The first run creates a sparse 64 MiB image. Use `QEMU_NVME_IMAGE` to select a
+different image.
+
+Use `make fat-image` with `dosfstools` to create `build/fat32.img`, then set
+`QEMU_NVME_IMAGE=build/fat32.img` to attach it. This target creates a volume
+only when the image is missing. Set `QEMU_CPUS` on `run` or `debug` to
+start more than one virtual CPU.
 
 ```make
+QEMU_NVME_IMAGE ?= $(BUILD)/nvme.img
 QEMU_DEVICES := \
-	-drive if=none,id=nvme0,file=/dev/null,format=raw \
+	-drive if=none,id=nvme0,file=$(QEMU_NVME_IMAGE),format=raw \
 	-device nvme,drive=nvme0,serial=nyvela0
 ```
 
-`if=none` keeps the backend off the emulated machine's IDE/SATA controller - it
-is attached only to the `nvme` device. The backing file is `/dev/null`: the
-controller is present for enumeration and config-space reads, and every I/O
-against it fails.
+`if=none` attaches the image exclusively to the NVMe controller. Writes to the
+namespace persist in the image across runs.
 
 `serial` is required. QEMU 11 refuses to start an `nvme` device without one:
 
@@ -277,3 +286,37 @@ project, not here.
 ## See also
 
 [Boot chain](boot.md), [userspace](userspace.md), [debugging](debugging.md).
+
+## Rust in the kernel
+
+Install Rust 1.85 or later with the `x86_64-unknown-none` target
+(`rustup target add x86_64-unknown-none`). The normal `make` build invokes Cargo
+in `src/kernel/rust` (with its target directory under `build/kernel/cargo`) and
+copies the resulting staticlib to `build/kernel/libnyvela_rust.a` before linking
+it into `kernel.elf`. The crate uses `core`, static addressing and aborting
+panics. The target uses a soft-float ABI and the build disables the red zone.
+A Rust panic reports a fatal error through the C console and halts the CPU.
+
+`cpuinfo.rs` uses the `no_std` `raw-cpuid` crate to collect CPUID data at boot:
+vendor, brand string, family/model/stepping, APIC IDs and APIC features, plus
+physical-core and logical-processor counts with the leaf that supplied them.
+CPUID only describes the boot processor's package; system-wide core enumeration
+requires ACPI/MP table parsing, which the kernel does not do yet.
+
+Use safe Rust interfaces from kernel code. For example, `BootConsole` takes
+borrowed strings and implements `core::fmt::Write` for allocation-free
+formatting. Its unsafe constructor requires exclusive console access. The
+C boot call meets that contract before interrupts and scheduling start.
+Keep the handle within that boot phase.
+
+- Add C imports to `src/kernel/rust/bindings.rs` and mirror the C signatures
+  there. For C macros or inline functions, export a small C bridge function.
+  Put raw pointer, lifetime and execution-context checks at the boundary and
+  expose safe functions only when their invariants can be enforced.
+- Export Rust functions with `extern "C"` and `#[unsafe(no_mangle)]` and add
+  matching declarations to `include/nyvela/kernel/rust.h`. Use fixed-width
+  integers, pointers, and `#[repr(C)]` structs where needed. Document any
+  caller obligations in both languages.
+
+During boot, `Nyvela Rust kernel ready.` verifies the C entry into Rust and
+the Rust call back into the C console.

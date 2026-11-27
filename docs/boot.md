@@ -42,7 +42,7 @@ in a known state.
 3. Loads `CR3` and sets `CR0.PG`.
 4. Far jumps to selector `0x28` (the 64-bit code segment), sets `RSP = 0x80000`.
 5. Copies the staged kernel from `0x10000` to `0x100000` with `rep movsq`,
-   `KERNEL_SECTORS * 512 / 8` quadwords, and jumps there.
+   `KERNEL_SECTORS * 512 / 8` quadwords, and calls the kernel entry with SysV stack alignment.
 
 Stage 2 is padded to exactly 16384 bytes, matching the 32 sectors stage 1 reads.
 
