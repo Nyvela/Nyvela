@@ -1,9 +1,12 @@
 #![no_std]
 #![deny(unsafe_op_in_unsafe_fn)]
 
+mod acpi;
 mod bindings;
 mod console;
 mod cpuinfo;
+mod exec;
+mod smp;
 
 use core::panic::PanicInfo;
 

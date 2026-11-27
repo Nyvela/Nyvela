@@ -13,28 +13,28 @@ Tested on Linux with GCC 13+ and QEMU 8+.
 
 ## nyvela.conf
 
-Nyvela is kernel-only. Neither the init program nor the shell is in this tree,
-but the kernel needs something to boot into in order to be exercised, so `make`
-reads `nyvela.conf` from the repo root and stops immediately if it is missing or
-incomplete. Ten keys, in four groups:
+The userspace programs live in sibling repositories. `make` reads their paths
+and build settings from `nyvela.conf` in the repo root.
 
 ```make
 INIT_DIR = ../Nyvd
 INIT_BIN_NAME = nyvd
-INIT_BUILD_COMMAND = USER_CFLAGS="-I$(CURDIR)/include" make -C $(INIT_DIR)
+INIT_BUILD_COMMAND = USER_CFLAGS="-I$(CURDIR)/include $(X86_CFLAGS)" $(MAKE) -B -C $(INIT_DIR)
 
-SHELL_DIR = ../nyvsh
+SHELL_DIR = ../Nyvsh
 SHELL_BIN_NAME = shell
 SHELL_BUILD_COMMAND = make -C $(SHELL_DIR)
 
 NVMED_DIR = ../nvmed-rs
 NVMED_BIN_NAME = nvmed
 
-NPCID_DIR = ../npcid
+NPCID_DIR = ../Npcid
 NPCID_BIN_NAME = npcid
+
+FAT_DIR = ../Nyvfat
 ```
 
-Every one of the ten is **required**. `make` checks each with `ifndef` and
+Each key is required. `make` checks each with `ifndef` and
 `$(error)`, so there are no defaults to fall back on. Each error message names
 the key that is actually missing.
 
@@ -50,13 +50,12 @@ the key that is actually missing.
 | `NVMED_BIN_NAME` | base name of its flat binary; published as `/bin/nvmed` |
 | `NPCID_DIR` | directory of the `npcid` project |
 | `NPCID_BIN_NAME` | base name of its flat binary; published as `/bin/npcid` |
+| `FAT_DIR` | directory of the Nyvfat checkout, which produces `build/fat.bin` |
 
-The `NVMED_*` and `NPCID_*` pairs differ from the other two in one way: they have
-no `*_BUILD_COMMAND` key. Those projects are built by a plain recursive
-`$(MAKE) -C $(DIR)`, so the two keys are only the directory and the binary name.
+Nyvela invokes recursive builds for nvmed, npcid, and Nyvfat.
 
-All four binaries are embedded with `incbin` (`src/user/blobs/*_blob.s`, via
-`-D<NAME>_BIN=`) and published into ramfs at boot:
+Nyvela embeds the userspace binaries and publishes them into ramfs at boot.
+The assembly blobs use `incbin` and Nyvfat uses Rust's `include_bytes!`.
 
 | blob | published as |
 |------|--------------|
@@ -64,9 +63,9 @@ All four binaries are embedded with `incbin` (`src/user/blobs/*_blob.s`, via
 | `shell_blob.s` | `/bin/sh` |
 | `nvmed_blob.s` | `/bin/nvmed` |
 | `npcid_blob.s` | `/bin/npcid` |
+| `exec.rs` | `/bin/fat` |
 
-Nothing from any of the four projects is expected to end up in this repository;
-each only has to produce a working flat binary.
+Each userspace project provides its own flat binary.
 
 `INIT_BUILD_COMMAND` must forward `USER_CFLAGS`, if the init project includes
 Nyvela headers (`<nyvela/user/syslib.h>`) and only learns the include path from
@@ -89,7 +88,7 @@ So the rule also depends on the init project's own sources:
 INIT_INPUTS := $(shell find $(INIT_DIR)/src $(INIT_DIR)/include -type f 2>/dev/null) \
                $(INIT_DIR)/makefile $(INIT_DIR)/linker.ld
 
-$(INIT_BIN): nyvela.conf $(INIT_INPUTS)
+$(INIT_BIN): makefile nyvela.conf $(INIT_INPUTS)
 	$(INIT_BUILD_COMMAND)
 ```
 
@@ -169,6 +168,11 @@ truncate -s $$(( ( $(KERNEL_LBA) + $(KERNEL_SECTORS) ) * 512 )) $@
 `run` and `debug` both attach an NVMe controller with a writable test namespace.
 The first run creates a sparse 64 MiB image. Use `QEMU_NVME_IMAGE` to select a
 different image.
+
+Use `make fat-image` with `dosfstools` to create `build/fat32.img`, then set
+`QEMU_NVME_IMAGE=build/fat32.img` to attach it. This target creates a volume
+only when the image is missing. Set `QEMU_CPUS` on `run` or `debug` to
+start more than one virtual CPU.
 
 ```make
 QEMU_NVME_IMAGE ?= $(BUILD)/nvme.img

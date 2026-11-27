@@ -7,7 +7,7 @@
 
 #define VFS_NAME_MAX 63
 #define VFS_PATH_MAX 256
-#define VFS_MAX_FILE_SIZE (8ULL * 4096ULL)
+#define VFS_MAX_FILE_SIZE (16ULL * 4096ULL)
 
 #define VFS_OK 0
 #define VFS_ERR_INVAL -1

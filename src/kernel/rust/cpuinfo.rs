@@ -1,7 +1,7 @@
 //! CPU identification and topology collection via `raw-cpuid`.
 //!
-//! CPUID only describes the package the boot processor belongs to. The counts
-//! below are therefore per package until the kernel parses ACPI/MP tables.
+//! CPUID describes the boot processor's package. The SMP startup code uses
+//! ACPI to find processors across packages.
 
 use crate::console::BootConsole;
 use core::fmt::Write;
@@ -203,7 +203,8 @@ pub(super) fn report(console: &mut BootConsole, info: &CpuInfo) {
         console,
         "APIC: initial id {}, x2APIC id {}, apic {}, x2apic {}, htt {}, hypervisor {}",
         info.initial_apic_id,
-        info.x2apic_id.map_or(u32::from(info.initial_apic_id), |id| id),
+        info.x2apic_id
+            .map_or(u32::from(info.initial_apic_id), |id| id),
         info.apic,
         info.x2apic,
         info.htt,

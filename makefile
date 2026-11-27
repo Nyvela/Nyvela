@@ -44,6 +44,10 @@ ifndef NPCID_BIN_NAME
 $(error NPCID_BIN_NAME is not configured. (see nyvela.conf))
 endif
 
+ifndef FAT_DIR
+$(error FAT_DIR is not configured. (see nyvela.conf))
+endif
+
 INIT_BIN := $(INIT_DIR)/build/$(INIT_BIN_NAME).bin
 SHELL_BIN := $(SHELL_DIR)/build/$(SHELL_BIN_NAME).bin
 INIT_INPUTS := $(shell find $(INIT_DIR)/src $(INIT_DIR)/include -type f 2>/dev/null) \
@@ -57,6 +61,10 @@ NVMED_INPUTS := $(shell find $(NVMED_DIR)/src $(NVMED_DIR)/include -type f 2>/de
 NPCID_BIN := $(NPCID_DIR)/build/$(NPCID_BIN_NAME).bin
 NPCID_INPUTS := $(shell find $(NPCID_DIR)/src $(NPCID_DIR)/include -type f 2>/dev/null) \
                 $(NPCID_DIR)/makefile $(NPCID_DIR)/linker.ld
+
+FAT_BIN := $(FAT_DIR)/build/fat.bin
+FAT_INPUTS := $(wildcard $(FAT_DIR)/src/*.rs) $(FAT_DIR)/Cargo.toml \
+              $(FAT_DIR)/Cargo.lock $(FAT_DIR)/makefile $(FAT_DIR)/linker.ld
 
 CC := gcc
 AS := nasm
@@ -74,6 +82,7 @@ BOOT_DIR := $(ARCH_DIR)/boot
 BOOT := $(BUILD)/boot.bin
 STAGE1 := $(BUILD)/stage_1.bin
 STAGE2 := $(BUILD)/stage_2.bin
+AP_BOOT := $(BUILD)/ap.bin
 KERNEL := $(BUILD)/kernel.bin
 IMAGE := $(BUILD)/os.img
 
@@ -134,7 +143,7 @@ RUST_SOURCES := $(shell find $(RUST_DIR) -type f -name '*.rs') \
                 $(RUST_DIR)/Cargo.toml $(RUST_DIR)/Cargo.lock
 RUST_FLAGS := -C no-redzone=yes -C relocation-model=static -C code-model=small
 
-.PHONY: all clean run debug build-init
+.PHONY: all clean run debug build-init fat-image
 
 all: $(IMAGE)
 
@@ -147,6 +156,9 @@ $(NVMED_BIN): $(NVMED_INPUTS)
 $(NPCID_BIN): makefile $(NPCID_INPUTS)
 	@$(MAKE) -B -C $(NPCID_DIR) CC="$(CC) $(X86_CFLAGS)"
 
+$(FAT_BIN): $(FAT_INPUTS)
+	@$(MAKE) -C $(FAT_DIR)
+
 $(BOOT): $(BOOT_DIR)/boot.s
 	@mkdir -p $(dir $@)
 	$(AS) -f bin -I$(BOOT_DIR)/ $< -o $@
@@ -158,6 +170,10 @@ $(STAGE1): $(BOOT_DIR)/stage_1.s $(KERNEL)
 $(STAGE2): $(BOOT_DIR)/stage_2.s $(KERNEL)
 	@mkdir -p $(dir $@)
 	$(AS) -f bin -I$(BOOT_DIR)/ -DKERNEL_SECTORS=$(KERNEL_SECTORS) $< -o $@
+
+$(AP_BOOT): $(BOOT_DIR)/ap.s
+	@mkdir -p $(dir $@)
+	$(AS) -f bin $< -o $@
 
 $(BUILD)/%.o: $(SRC_DIR)/%.c $(INIT_BIN) makefile
 	@mkdir -p $(dir $@)
@@ -197,9 +213,10 @@ $(NPCID_BLOB_O): $(NPCID_BLOB_S) $(NPCID_BIN)
 
 $(BUILD)/kernel/kernel.o: include/nyvela/kernel/rust.h
 
-$(RUST_LIB): $(RUST_SOURCES) makefile
+$(RUST_LIB): $(RUST_SOURCES) $(AP_BOOT) $(FAT_BIN) makefile
 	@mkdir -p $(dir $@)
 	CARGO_TARGET_DIR=$(abspath $(RUST_CARGO_TARGET)) RUSTFLAGS="$(RUST_FLAGS)" \
+	NYVELA_AP_BOOT="$(abspath $(AP_BOOT))" NYVELA_FAT_BIN="$(abspath $(FAT_BIN))" \
 	$(CARGO) build --release --target x86_64-unknown-none --manifest-path $(RUST_DIR)/Cargo.toml
 	cp $(RUST_CARGO_TARGET)/x86_64-unknown-none/release/libnyvela_kernel.a $@
 
@@ -214,17 +231,28 @@ $(IMAGE): $(BOOT) $(STAGE1) $(STAGE2) $(KERNEL)
 	@truncate -s $$(( ( $(KERNEL_LBA) + $(KERNEL_SECTORS) ) * 512 )) $@
 
 QEMU_NVME_IMAGE ?= $(BUILD)/nvme.img
+FAT_IMAGE ?= $(BUILD)/fat32.img
+QEMU_CPUS ?= 1
+
+fat-image: $(FAT_IMAGE)
+
+$(FAT_IMAGE):
+	@mkdir -p $(dir $@)
+	mkfs.fat -C -F 32 -n NYVELA $@ 65536
 
 QEMU_DEVICES := \
 	-drive if=none,id=nvme0,file=$(QEMU_NVME_IMAGE),format=raw \
 	-device nvme,drive=nvme0,serial=nyvela0
 
+ifneq ($(QEMU_NVME_IMAGE),$(FAT_IMAGE))
 $(QEMU_NVME_IMAGE):
 	@mkdir -p $(dir $@)
 	truncate -s 64M $@
+endif
 
 run: $(IMAGE) $(QEMU_NVME_IMAGE)
 	qemu-system-x86_64 \
+		-smp $(QEMU_CPUS) \
 		-drive format=raw,file=$(IMAGE) \
 		$(QEMU_DEVICES) \
 		-d int,cpu_reset,guest_errors \
@@ -232,6 +260,7 @@ run: $(IMAGE) $(QEMU_NVME_IMAGE)
 
 debug: $(IMAGE) $(QEMU_NVME_IMAGE)
 	qemu-system-x86_64 \
+		-smp $(QEMU_CPUS) \
 		-drive format=raw,file=$(IMAGE) \
 		$(QEMU_DEVICES) \
 		-d int,cpu_reset,guest_errors \

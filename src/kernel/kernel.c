@@ -27,7 +27,7 @@ extern uint8_t init_blob_end[], init_blob_start[];
 extern uint8_t nvmed_blob_end[], nvmed_blob_start[];
 extern uint8_t npcid_blob_end[], npcid_blob_start[];
 
-static void kload_user_bin(char *path, uint8_t* blob_start, uint8_t* blob_end) {
+static void kload_user_bin(const char *path, const uint8_t *blob_start, const uint8_t *blob_end) {
   uint64_t bin_size = (uint64_t)(blob_end - blob_start);
 
   if (bin_size == 0 || bin_size > VFS_MAX_FILE_SIZE) {
@@ -55,6 +55,8 @@ static void kload_user_bins(void) {
   kload_user_bin("/bin/sh", shell_blob_start, shell_blob_end);
   kload_user_bin("/bin/nvmed", nvmed_blob_start, nvmed_blob_end);
   kload_user_bin("/bin/npcid", npcid_blob_start, npcid_blob_end);
+  nyvela_image_t fat = nyvela_fat_image();
+  kload_user_bin("/bin/fat", fat.bytes, fat.bytes + fat.length);
   kload_user_bin("/bin/hello", hello_blob_start, hello_blob_end);
   kload_user_bin("/bin/init", init_blob_start, init_blob_end);
 
@@ -256,6 +258,8 @@ void kmain(void) {
   ksetup_lapic_timer();
   
   kprintsucc("LAPIC timer setup complete.", 0x0F);
+
+  nyvela_smp_init();
 
   kpic_disable();
 

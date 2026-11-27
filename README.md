@@ -18,9 +18,11 @@ Working:
   context switches
 - `int $0x80` syscalls: console, ramfs, exec, threads, address spaces, pages, IPC
 - a userspace init that spawns a separate ring3 shell
+- FAT32 file and directory operations on an NVMe namespace through Nyvfat
+- ACPI processor discovery and Rust kernel workers on secondary xAPIC CPUs
 
-Work-In-Progress: fault handlers log and halt rather than recovering, there's no IST,
-no SMP, no persistent filesystem, no ELF loader.
+The boot processor runs the userspace scheduler. Secondary processors run
+explicitly dispatched Rust kernel jobs. ELF loading is still on the roadmap.
 
 ## Quick start
 
@@ -28,9 +30,16 @@ You need `gcc` with C23 support, `nasm`, `ld`, `objcopy`, `make`,
 `qemu-system-x86_64`, and Rust 1.85 or later. Install the freestanding Rust
 target with `rustup target add x86_64-unknown-none`.
 
-One bit of setup first. This repo is kernel-only, so `make` expects a
-`nyvela.conf` pointing at the two userspace programs it boots into: an init
-program and a shell. It will not run without one.
+Clone the userspace dependencies next to the kernel checkout. Point
+`nyvela.conf` at their locations if you use a different directory layout.
+
+```sh
+git clone https://github.com/Nyvela/Nyvd.git
+git clone https://github.com/Nyvela/Nyvsh.git
+git clone https://github.com/Nyvela/Npcid.git
+git clone https://github.com/amogus-gggy/nvmed-rs.git
+git clone https://github.com/amogus-gggy/Nyvfat.git
+```
 
 Example config:
 
@@ -38,17 +47,19 @@ Example config:
 # nyvela.conf
 INIT_DIR = ../Nyvd
 INIT_BIN_NAME = nyvd
-INIT_BUILD_COMMAND = USER_CFLAGS="-I$(CURDIR)/include" make -C $(INIT_DIR)
+INIT_BUILD_COMMAND = USER_CFLAGS="-I$(CURDIR)/include $(X86_CFLAGS)" $(MAKE) -B -C $(INIT_DIR)
 
-SHELL_DIR = ../nyvsh
+SHELL_DIR = ../Nyvsh
 SHELL_BIN_NAME = shell
 SHELL_BUILD_COMMAND = make -C $(SHELL_DIR)
 
 NVMED_DIR = ../nvmed-rs
 NVMED_BIN_NAME = nvmed
 
-NPCID_DIR = ../npcid
+NPCID_DIR = ../Npcid
 NPCID_BIN_NAME = npcid
+
+FAT_DIR = ../Nyvfat
 ```
 
 Then:
@@ -61,6 +72,18 @@ make debug  # boot paused, GDB stub on :1234
 
 You should land at a `Nyvela >` prompt. Try `help`, `ls`, `cat readme.txt`, and
 `run hello`.
+
+With `dosfstools` installed, create a separate FAT32 image and boot with four
+virtual CPUs.
+
+```sh
+make fat-image
+make run QEMU_CPUS=4 QEMU_NVME_IMAGE=build/fat32.img
+```
+
+At the Nyvela prompt, type `run fat`. Inside `fat`, use `ls`, `cat <path>`,
+`mkdir <path>`, `write <path> <text>`, and `exit`. Changes persist in
+`build/fat32.img`. The image contains a FAT32 volume starting at LBA 0.
 
 ## Shape of it
 
@@ -126,7 +149,8 @@ The `docs/` directory has the detail:
 - [x] Syscalls (`int $0x80`)
 - [ ] Fault recovery - handlers currently log and halt
 - [ ] IST stacks so a ring3 fault cannot take the kernel down
-- [ ] SMP
+- [x] Start secondary xAPIC processors and run Rust kernel jobs
+- [ ] Schedule userspace threads on secondary processors
 
 ### Userspace
 
@@ -135,11 +159,11 @@ The `docs/` directory has the detail:
 - [x] User SDK (`syslib.h`)
 - [x] Shell (`help` / `ls` / `cat` / `echo` / `run` / `clear` / `exit`)
 - [x] VFS + ramfs
+- [x] FAT32 file and directory operations over NVMe IPC
 - [x] Detach the init program fully from the kernel
 - [x] IPC: receive side, and move the scratch address off the target's code page
 - [ ] Thread reaping, and ownership-checked user pointers
 - [ ] ELF loader, so user programs stop needing a flat binary at a fixed base
-- [ ] Persistent filesystem
 
 ### Graphics
 

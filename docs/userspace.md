@@ -31,7 +31,7 @@ Constants live in `include/nyvela/mm/vmm.h` and are mirrored in `syslib.h`:
 | `USER_STACK_PAGE` | `0x44F000` | init/shell stack page |
 | `PROG_BASE` | `0x500000` | `exec` target slot (`PROG_PAGES` = 16) |
 | `PROG_STACK_TOP` | `0x600000` | program stack top |
-| `PROG_STACK_PAGE` | `0x5FF000` | program stack page |
+| `PROG_STACK_PAGE` | `0x5FF000` | highest program stack page, with seven additional pages below it for an exec child |
 | `USER_AREA_BASE` / `USER_AREA_END` | `0x400000` / `0x700000` | syscall pointer validity window |
 
 ## Bootstrap

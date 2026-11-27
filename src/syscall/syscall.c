@@ -17,6 +17,7 @@
 #include "../../include/nyvela/as/as.h"
 #include "../../include/nyvela/mm/dma.h"
 #include "../../include/nyvela/arch/x86_64/apic/apic.h"
+#include "../../include/nyvela/kernel/rust.h"
 
 extern void switch_context(context_t *context);
 
@@ -344,9 +345,17 @@ static void sys_exec(syscall_frame_t *f) {
     return;
   }
 
+  if (!nyvela_map_exec_stack(cr3, PROG_STACK_PAGE)) {
+    kvmm_free_user_pml4(cr3);
+    f->rax = (uint64_t)(int64_t)VFS_ERR_NOSPACE;
+    sti();
+    return;
+  }
+
   thread_t *child = spawn_thread((void (*)(void))PROG_BASE, cr3);
   
   if (!child) {
+    kvmm_free_user_pml4(cr3);
     sti();
     f->rax = (uint64_t)(int64_t)VFS_ERR_NOSPACE;
     return;

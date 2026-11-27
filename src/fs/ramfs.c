@@ -4,7 +4,7 @@
 #include "../../include/nyvela/mm/pmm.h"
 #include "../../include/nyvela/lib/utils.h"
 
-#define RAMFS_PAGES_PER_FILE 8
+#define RAMFS_PAGES_PER_FILE (VFS_MAX_FILE_SIZE / 4096)
 
 typedef struct ramfs_node {
   char name[VFS_NAME_MAX + 1];
