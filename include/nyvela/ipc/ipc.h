@@ -15,7 +15,10 @@ typedef struct ipc_queue {
   uint64_t capacity, head, tail, count;
 } ipc_queue_t;
 
-bool kipc_send(uint64_t target, uint8_t* msg, uint64_t size);
+uint8_t *kipc_alloc_payload(uint64_t size);
+void kipc_free_message(const ipc_msg_t *msg);
+// Takes ownership of the payload on success.
+bool kipc_send(ipc_msg_t msg);
 bool kipc_poll(ipc_msg_t* msg);
 
 #endif // NYVIPC_H

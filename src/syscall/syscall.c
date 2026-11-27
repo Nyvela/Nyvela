@@ -16,11 +16,12 @@
 #include "../../include/nyvela/mm/pmm.h"
 #include "../../include/nyvela/as/as.h"
 #include "../../include/nyvela/mm/dma.h"
+#include "../../include/nyvela/arch/x86_64/apic/apic.h"
 
 extern void switch_context(context_t *context);
 
 static bool user_range_ok(uint64_t addr, uint64_t len) {
-  if (len > SYSCALL_MAX_BUF + SYSCALL_MAX_PATH) return false;
+  if (len > SYS_IPC_MAX_MESSAGE) return false;
   if (addr < USER_AREA_BASE) return false;
   if (len == 0) return addr < USER_AREA_END;
   if (addr + len < addr) return false;
@@ -549,26 +550,38 @@ void sys_ipc_send(syscall_frame_t *f) {
   uint64_t ubuf = f->rsi;
   uint64_t size = f->rdx;
 
-  if (size == 0 || size > SYSCALL_MAX_BUF) {
+  if (size == 0 || size > SYS_IPC_MAX_MESSAGE) {
     f->rax = (uint64_t)(int64_t)VFS_ERR_INVAL;
     return;
   }
 
-  char *kbuf = kmalloc(size);
+  // Verify every page before copying in the current address space.
+  if (!user_range_ok(ubuf, size)) {
+    f->rax = (uint64_t)(int64_t)VFS_ERR_INVAL;
+    return;
+  }
+  for (uint64_t page = ubuf & ~0xFFFULL; page < ubuf + size; page += 4096) {
+    uint64_t *pte = kget_pte_addr_at(current_thread->context->cr3, page);
+    if (!pte || (*pte & 0x005) != 0x005) {
+      f->rax = (uint64_t)(int64_t)VFS_ERR_INVAL;
+      return;
+    }
+  }
 
-  if (!kbuf) {
+  ipc_msg_t msg = {
+    .target = target,
+    .sender = current_thread->tid,
+    .msg = kipc_alloc_payload(size),
+    .size = size
+  };
+  if (!msg.msg) {
     f->rax = (uint64_t)(int64_t)VFS_ERR_NOSPACE;
     return;
   }
 
-  if (copy_from_user(ubuf, kbuf, size) != 0) {
-    kfree(kbuf);
-    f->rax = (uint64_t)(int64_t)VFS_ERR_INVAL;
-    return;
-  }
-
-  f->rax = kipc_send(target, (uint8_t*)kbuf, size);
-  kfree(kbuf);
+  memcpy(msg.msg, (const void*)ubuf, size);
+  f->rax = kipc_send(msg);
+  if (!f->rax) kipc_free_message(&msg);
 }
 
 void sys_ipc_poll(syscall_frame_t *f) {
@@ -584,26 +597,26 @@ void sys_ipc_poll(syscall_frame_t *f) {
   }
 
   if (msg.size > capacity) {
-    kfree(msg.msg);
+    kipc_free_message(&msg);
     f->rax = 0;
     return;
   }
 
   if (copy_to_user_at(current_thread->context->cr3, uaddr, msg.msg, msg.size) != 0) {
-    kfree(msg.msg);
+    kipc_free_message(&msg);
     f->rax = 0;
     return;
   }
 
   if (sender_out) {
     if (copy_to_user_at(current_thread->context->cr3, sender_out, &msg.sender, sizeof(uint64_t)) != 0) {
-      kfree(msg.msg);
+      kipc_free_message(&msg);
       f->rax = 0;
       return;
     }
   }
 
-  kfree(msg.msg);
+  kipc_free_message(&msg);
   f->rax = msg.size;
 }
 
@@ -713,8 +726,10 @@ void sys_dma_alloc_page(syscall_frame_t* f) {
     return;
   }
 
-  if (copy_to_user(f->rdi, &phys, sizeof(phys)) != 0) {
-    // TODO: rollback
+  if (copy_to_user_at(current_thread->context->cr3, f->rdi, &phys, sizeof(phys)) != 0) {
+    kvmunmap_at(current_thread->context->cr3, virt);
+    kdma_pfree(dma_page);
+    f->rax = 0;
     return;
   }
 
@@ -722,16 +737,20 @@ void sys_dma_alloc_page(syscall_frame_t* f) {
 }
 
 void sys_dma_free_page(syscall_frame_t* f) {
-  void* dma_virt_page = (void*)f->rdi;
+  uint64_t virt = f->rdi;
+  uint64_t offset = virt - DMA_VIRT_BASE;
+  f->rax = 0;
 
-  uint64_t n = ((uint64_t)dma_virt_page - DMA_VIRT_BASE) / 4096; 
-  uint64_t dma_page = DMA_PAGES + n * 4096;
+  if (offset >= DMA_PAGE_AMOUNT * 4096 || (offset & 0xFFF)) return;
 
-  if (dma_page < DMA_PAGES || dma_page >= DMA_PAGES + (DMA_PAGE_AMOUNT * 4096)) {
-    return;
-  }
+  uint64_t cr3 = current_thread->context->cr3;
+  uint64_t phys = DMA_PAGES + offset;
+  uint64_t *pte = kget_pte_addr_at(cr3, virt);
+  if (!pte || (*pte & 0x005) != 0x005 || (*pte & ~0xFFFULL) != phys) return;
 
-  kdma_pfree((void*)dma_page);
+  kvmunmap_at(cr3, virt);
+  kdma_pfree((void*)phys);
+  f->rax = 1;
 }
 
 void sys_mmap(syscall_frame_t* f) {
@@ -783,7 +802,14 @@ void sys_map_mmio(syscall_frame_t* f) {
   }
 
   for (uint64_t i = 0; i < pages; i++) {
-    kvmmap_at(current_thread->context->cr3, virt + i * 0x1000, phys + i * 0x1000, 0x1F);
+    if (!kvmmap_at(current_thread->context->cr3, virt + i * 0x1000, phys + i * 0x1000, 0x1F)) {
+      while (i > 0) {
+        i--;
+        kvmunmap_at(current_thread->context->cr3, virt + i * 0x1000);
+      }
+      f->rax = 0;
+      return;
+    }
   }
 
   f->rax = virt;
@@ -883,10 +909,48 @@ void sys_pci_conf_read32(syscall_frame_t *f) {
   f->rax = inl(0xCFC);
 }
 
+// Nyvela currently runs a single NVMe service. Only alter the command word,
+// leaving PCI status (whose bits may be write-one-to-clear) untouched.
+static void sys_nvme_claim(syscall_frame_t *f) {
+  static uint64_t owner;
+  static uint32_t config;
+  static uint16_t original_command;
+
+  f->rax = 0;
+  if (!current_thread) return;
+  if (f->rsi == 1) {
+    if (owner != current_thread->tid) return;
+    outl(0xCF8, config + 4);
+    outw(0xCFC, original_command);
+    owner = 0;
+    f->rax = 1;
+    return;
+  }
+  if (f->rsi != 0 || owner || f->rdi > 0xFFFF) return;
+
+  uint32_t address = 0x80000000U | ((uint32_t)f->rdi << 8);
+  outl(0xCF8, address + 8);
+  if (inl(0xCFC) >> 8 != 0x010802) return;
+
+  config = address;
+  outl(0xCF8, config + 4);
+  original_command = inw(0xCFC);
+  // Enable memory decoding and DMA. Disable INTx for this polled driver.
+  outw(0xCFC, original_command | 0x406);
+  owner = current_thread->tid;
+  f->rax = 1;
+}
+
 void syscall_handler(syscall_frame_t *f) {
   if (!f) return;
 
   switch (f->rax) {
+    case SYS_CLOCK_MS:
+      f->rax = lapic_ticks_ms;
+      break;
+    case SYS_NVME_CLAIM:
+      sys_nvme_claim(f);
+      break;
     case SYS_GET_SELF_TID:
       f->rax = current_thread ? current_thread->tid : 0;
       break;
