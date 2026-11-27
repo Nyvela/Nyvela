@@ -25,7 +25,7 @@ SHELL_DIR = ../nyvsh
 SHELL_BIN_NAME = shell
 SHELL_BUILD_COMMAND = make -C $(SHELL_DIR)
 
-NVMED_DIR = ../nvmed
+NVMED_DIR = ../nvmed-rs
 NVMED_BIN_NAME = nvmed
 
 NPCID_DIR = ../npcid

@@ -27,7 +27,7 @@ SHELL_DIR = ../nyvsh
 SHELL_BIN_NAME = shell
 SHELL_BUILD_COMMAND = make -C $(SHELL_DIR)
 
-NVMED_DIR = ../nvmed
+NVMED_DIR = ../nvmed-rs
 NVMED_BIN_NAME = nvmed
 
 NPCID_DIR = ../npcid
@@ -46,7 +46,7 @@ the key that is actually missing.
 | `SHELL_DIR` | directory of the shell project |
 | `SHELL_BIN_NAME` | base name of its flat binary; `make` expects `$(SHELL_DIR)/build/$(SHELL_BIN_NAME).bin` |
 | `SHELL_BUILD_COMMAND` | command that rebuilds it |
-| `NVMED_DIR` | directory of the `nvmed` project |
+| `NVMED_DIR` | directory of the `nvmed-rs` project (Rust NVMe driver) |
 | `NVMED_BIN_NAME` | base name of its flat binary; published as `/bin/nvmed` |
 | `NPCID_DIR` | directory of the `npcid` project |
 | `NPCID_BIN_NAME` | base name of its flat binary; published as `/bin/npcid` |
@@ -98,9 +98,12 @@ that root becomes invisible to the dependency graph.
 
 ### nvmed and npcid
 
-`nvmed` and `npcid` are further out-of-tree user programs, embedded as
-`/bin/nvmed` and `/bin/npcid`. Both are located by the `NVMED_*` and `NPCID_*`
-keys described above, and both are rebuilt by a recursive `make`:
+`nvmed` is the userspace NVMe block service from the `nvmed-rs` checkout: a
+`no_std` Rust program whose own `makefile` runs Cargo for the
+`x86_64-unknown-none` target and produces `build/nvmed.bin`. `npcid` remains a C
+program. Both are out-of-tree user programs, embedded as `/bin/nvmed` and
+`/bin/npcid`. Both are located by the `NVMED_*` and `NPCID_*` keys described
+above, and both are rebuilt by a recursive `make`:
 
 ```make
 NVMED_BIN := $(NVMED_DIR)/build/$(NVMED_BIN_NAME).bin
