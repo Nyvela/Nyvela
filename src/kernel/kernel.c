@@ -18,6 +18,9 @@
 #include "../../include/nyvela/drivers/video/vga/vga.h"
 #include "../../include/nyvela/mm/dma.h"
 
+#include <nyvela/kernel/rust.h>
+
+extern uint8_t kernel_bss_start[], kernel_bss_end[];
 extern uint8_t shell_blob_end[], shell_blob_start[];
 extern uint8_t hello_blob_end[], hello_blob_start[];
 extern uint8_t init_blob_end[], init_blob_start[];
@@ -170,8 +173,10 @@ void kuserspace_init() {
 }
 
 __attribute__((section(".text.entry")))
-void kmain() {
+void kmain(void) {
+  memset(kernel_bss_start, 0, (uintptr_t)kernel_bss_end - (uintptr_t)kernel_bss_start);
   kprintsucc("Nyvela kernel started.", 0x0F);
+  nyvela_rust_init();
 
   klog_ram_data();
 

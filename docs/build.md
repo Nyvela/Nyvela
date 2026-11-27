@@ -2,11 +2,12 @@
 
 ## Requirements
 
-* `gcc` with x86-64 support and freestanding flags
+* `gcc` with x86-64 and C23 support (GCC 13+)
 * `nasm`
 * `ld`, `objcopy`
 * `make`
 * `qemu-system-x86_64`
+* Rust 1.85+ with the `x86_64-unknown-none` target
 
 Tested on Linux with GCC 13+ and QEMU 8+.
 
@@ -277,3 +278,31 @@ project, not here.
 ## See also
 
 [Boot chain](boot.md), [userspace](userspace.md), [debugging](debugging.md).
+
+## Rust in the kernel
+
+Install Rust 1.85 or later with the `x86_64-unknown-none` target
+(`rustup target add x86_64-unknown-none`). The normal `make` build compiles
+`src/kernel/rust/lib.rs` into `build/kernel/libnyvela_rust.a` and links it into
+`kernel.elf` before producing the flat boot image. The crate uses `core`,
+static addressing and aborting panics. The target uses a soft-float ABI and
+the build disables the red zone. A Rust panic reports a fatal error through
+the C console and halts the CPU.
+
+Use safe Rust interfaces from kernel code. For example, `BootConsole` takes
+borrowed strings and implements `core::fmt::Write` for allocation-free
+formatting. Its unsafe constructor requires exclusive console access. The
+C boot call meets that contract before interrupts and scheduling start.
+Keep the handle within that boot phase.
+
+- Add C imports to `src/kernel/rust/bindings.rs` and mirror the C signatures
+  there. For C macros or inline functions, export a small C bridge function.
+  Put raw pointer, lifetime and execution-context checks at the boundary and
+  expose safe functions only when their invariants can be enforced.
+- Export Rust functions with `extern "C"` and `#[unsafe(no_mangle)]` and add
+  matching declarations to `include/nyvela/kernel/rust.h`. Use fixed-width
+  integers, pointers, and `#[repr(C)]` structs where needed. Document any
+  caller obligations in both languages.
+
+During boot, `Nyvela Rust kernel ready.` verifies the C entry into Rust and
+the Rust call back into the C console.
