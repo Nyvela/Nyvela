@@ -3,10 +3,6 @@ use core::arch::{asm, x86_64::__cpuid};
 const EFER: u32 = 0xc000_0080;
 const FS_BASE: u32 = 0xc000_0100;
 
-unsafe extern "C" {
-    fn isr_elf_syscall();
-}
-
 #[unsafe(no_mangle)]
 extern "C" fn lumen_arch_user_init() {
     unsafe {
@@ -25,10 +21,7 @@ extern "C" fn lumen_arch_user_init() {
             options(nostack),
         );
         let efer = read_msr(EFER);
-        write_msr(EFER, efer | (1 << 11) | 1); // NX and SYSCALL
-        write_msr(0xc000_0081, 0x28 << 32); // STAR: kernel CS
-        write_msr(0xc000_0082, isr_elf_syscall as *const () as u64);
-        write_msr(0xc000_0084, 0x44700); // TF, IF, DF, NT and AC
+        write_msr(EFER, (efer | (1 << 11)) & !1); // NX; applications enter via INT 0x80.
     }
 }
 

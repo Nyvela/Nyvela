@@ -16,7 +16,7 @@ Tested on Linux with GCC 13+ and QEMU 8+.
 
 The legacy service programs live in sibling repositories. `make` defaults to
 the standard checkout names and accepts overrides in `lumen.conf`.
-Clone Lumfw, Lumgfx and Lumeth alongside Lumen for the kernel's Rust drivers.
+Clone Lumfw, Lumgfx, Lumeth and Lumouse alongside Lumen for the kernel's Rust drivers.
 For the Clang and Rust standard-library toolchains, see
 [Static ELF applications](ports.md).
 
@@ -141,7 +141,7 @@ a user program to this tree, give its binary explicit prerequisites (see
 make          # build/os.img
 make run      # boot it in QEMU
 make debug    # boot paused, GDB stub on :1234
-make clean    # rm -rf build/
+make clean    # remove build artifacts and preserve the disk images
 ```
 
 `make` rebuilds the init binary if any of its sources changed, then rebuilds any

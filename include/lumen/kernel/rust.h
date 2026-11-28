@@ -22,6 +22,8 @@ void lumen_initrd(void);
 void lumen_graphics_prepare(void);
 void lumen_network_init(void);
 bool lumen_graphics_key(uint8_t code);
+void lumen_graphics_mouse(uint8_t code);
+void lumen_mouse_start(void);
 void lumen_user_memory_test(void);
 void lumen_ramfs_test(void);
 int64_t lumen_exec_elf(const char *path, size_t path_len,

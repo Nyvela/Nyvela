@@ -278,6 +278,7 @@ void kmain(void) {
   kpic_disable();
 
   kbd_init();
+  lumen_mouse_start();
 
   kprintsucc("Keyboard ready (IRQ1).", 0x0F);
     

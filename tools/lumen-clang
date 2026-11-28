@@ -1,8 +1,14 @@
 #!/bin/sh
 set -eu
 clang=${CLANG:-clang}
-include=${MUSL_INCLUDE:-/usr/include/x86_64-linux-musl}
-lib=${MUSL_LIB:-/usr/lib/x86_64-linux-musl}
+tool_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+sysroot=${LUMEN_SYSROOT:-$tool_dir/../build/libc/sysroot}
+include=$sysroot/include
+lib=$sysroot/lib
+if [ ! -r "$lib/liblumen_musl.a" ] || [ ! -r "$lib/libc.a" ]; then
+    echo "Build Lumen's musl sysroot with make libc first" >&2
+    exit 1
+fi
 resource=$("$clang" --print-resource-dir)
 
 for arg do
@@ -20,4 +26,4 @@ exec "$clang" --target=x86_64-linux-musl -fno-pie -nostdinc \
     -fuse-ld=lld -static -nostdlib -L"$lib" \
     -Wl,-no-pie,--image-base=0x50000000,--gc-sections \
     "$lib/crt1.o" "$lib/crti.o" "$@" \
-    -Wl,--start-group "$lib/libc.a" "$builtins" -Wl,--end-group "$lib/crtn.o"
+    -Wl,--start-group "$lib/libc.a" "$lib/liblumen_musl.a" "$builtins" -Wl,--end-group "$lib/crtn.o"

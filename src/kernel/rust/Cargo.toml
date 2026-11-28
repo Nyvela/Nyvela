@@ -11,6 +11,7 @@ crate-type = ["staticlib"]
 lumfw = { path = "../../../../Lumfw" }
 lumgfx = { path = "../../../../Lumgfx" }
 lumeth = { path = "../../../../Lumeth" }
+lumouse = { path = "../../../../Lumouse" }
 raw-cpuid = "11.6"
 smoltcp = { version = "0.12", default-features = false, features = ["medium-ethernet", "proto-ipv4", "socket-tcp", "socket-udp"] }
 

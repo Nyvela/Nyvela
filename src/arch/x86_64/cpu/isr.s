@@ -1,6 +1,3 @@
-section .bss
-  syscall_user_rsp resq 1
-
 section .text
   global isr_lapic_timer
   extern isr_lapic_timer_handler
@@ -12,6 +9,8 @@ section .text
 
   global isr_kbd
   extern kbd_irq_handler
+  global isr_mouse
+  extern mouse_irq_handler
 
   extern fault_dump
   extern lumen_user_fault
@@ -19,9 +18,6 @@ section .text
   global isr_syscall
   global syscall_return
   extern syscall_handler
-  global isr_elf_syscall
-  extern lumen_elf_syscall
-  extern tss
 
 %macro exception 3
   global %1
@@ -96,6 +92,7 @@ isr_lapic_timer:
 
 irq_handler isr_pit, isr_pit_handler
 irq_handler isr_kbd, kbd_irq_handler
+irq_handler isr_mouse, mouse_irq_handler
 
 %macro save_syscall_registers 0
   push rax
@@ -120,26 +117,6 @@ isr_syscall:
   cld
   mov rdi, rsp
   call syscall_handler
-  jmp syscall_return
-
-; SYSCALL leaves RSP alone and saves RIP/RFLAGS in RCX/R11. Only the
-; boot CPU runs userspace, so the entry scratch slot is CPU-local in practice.
-isr_elf_syscall:
-  mov [rel syscall_user_rsp], rsp
-  mov rsp, [rel tss + 4]
-  push rax
-  mov ax, 0x10
-  mov ss, ax
-  pop rax
-  push 0x23
-  push qword [rel syscall_user_rsp]
-  and r11, 0x378fd7 ; clear user IOPL and NT before the IRETQ frame
-  push r11
-  push 0x1b
-  push rcx
-  save_syscall_registers
-  mov rdi, rsp
-  call lumen_elf_syscall
 
 syscall_return:
   pop r15

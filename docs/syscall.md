@@ -1,15 +1,18 @@
 # Syscalls
 
-Legacy Lumen programs and services use `int $0x80`. Static ELF applications
-use the Linux x86-64 `syscall` convention described in
-[Static ELF applications](ports.md).
+Lumen programs enter through `int $0x80`. Boot services use the original
+flat-image operation table below. ELF applications share the console, IPC
+and timing operations and use the native application calls in `sdk/abi.rs`
+for file handles, memory, sockets, display and sessions. See
+[Native application calls](native.md) for the contracts. The
+[Lumen musl port](ports.md) implements POSIX calls in userspace.
 
 ## ABI
 
 | register | role |
 |----------|------|
 | `rax` | syscall number on entry, return value on exit |
-| `rdi`, `rsi`, `rdx`, `r10` | arguments 1..4 |
+| `rdi`, `rsi`, `rdx`, `r10`, `r8`, `r9` | application arguments 1..6 |
 | `rcx`, `r11` | clobbered |
 
 Returns are byte counts on success, or a negative `VFS_ERR_*` cast to `u64` on

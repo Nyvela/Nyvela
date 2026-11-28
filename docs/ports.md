@@ -1,20 +1,22 @@
 # Static ELF applications
 
-Lumen's ELF processes use the x86-64 Linux syscall and initial stack
-conventions implemented by static musl applications. The toolchain wrappers
-select the link address and build format expected by the kernel.
+Lumen ELF programs enter the kernel through the native `int 0x80` interface.
+The Lumen musl port uses that interface for POSIX library calls. Rust
+applications use the existing x86-64 musl standard library and link to
+Lumen's libc sysroot through the toolchain wrappers.
 
 ## Build and boot the applications
 
 On Debian or Ubuntu, install Clang, LLD, the Clang compiler-rt development
-package, musl development files, GNU cpio, and Freedoom in addition to the
+package, GNU cpio, patch, and Freedoom in addition to the
 [kernel dependencies](build.md). On Ubuntu the package names are `clang`,
-`lld`, `libclang-rt-dev`, `musl-dev`, `cpio`, and `freedoom`.
+`lld`, `libclang-rt-dev`, `cpio`, `patch`, and `freedoom`.
 
 Install the Rust targets and clone the upstream port sources alongside Lumen.
 
 ```sh
 rustup target add x86_64-unknown-none x86_64-unknown-linux-musl
+git clone --depth 1 --branch v1.2.5 https://git.musl-libc.org/git/musl ../musl
 git clone --branch version-3.50.4 https://github.com/sqlite/sqlite.git ../sqlite
 git clone https://github.com/ozkl/doomgeneric.git ../doomgeneric
 git -C ../doomgeneric checkout e257a09527062bfb986b6e5e0780839b6cbd5b71
@@ -35,6 +37,7 @@ run hello-std "two words"
 run sqlite3 /demo.db "create table demo (n); insert into demo values (42);"
 run sqlite3 /demo.db "select n from demo;"
 run doom
+run lumdesk
 ```
 
 SQLite uses the dotfile-lock VFS with rollback journals. Databases and Doom
@@ -44,7 +47,11 @@ IWAD from the host package, a 640×400 framebuffer, and PS/2 key events.
 Arrow keys move, Ctrl fires, Space uses doors, and Escape opens the menu.
 Audio is disabled.
 
+Use `make run-desktop` for the [login-gated desktop](desktop.md).
+
 ## Build another application
+
+Build the sysroot once with `make libc`.
 
 ```sh
 tools/lumen-rustc -C opt-level=s -C strip=symbols hello.rs -o hello
@@ -53,10 +60,11 @@ tools/lumen-clang -O2 -s hello.c -o hello
 readelf -l hello
 ```
 
-The Clang wrapper defaults to the Debian/Ubuntu x86-64 musl include and
-library directories. Set `MUSL_INCLUDE`, `MUSL_LIB`, or `CLANG` for a
-different installation. The Rust compiler uses its own bundled static musl
-runtime and the upstream `x86_64-unknown-linux-musl` standard library.
+Both wrappers link the Lumen musl port built from musl v1.2.5 in
+`build/libc/sysroot`. Set `LUMEN_SYSROOT` to use a different installation
+or `CLANG` to select a compiler. The Rust wrapper takes its standard
+library and unwinder from `x86_64-unknown-linux-musl` and selects Lumen's
+libc and startup objects at link time.
 
 Place applications in `bin/` in a `newc` cpio archive and pass it to the
 base VM with `-fw_cfg name=opt/lumen/initrd,file=/path/to/archive.cpio`.
@@ -74,13 +82,15 @@ files they contain. The shell runs executables from `/bin`.
   stack. The initial stack supplies `argc`, `argv`, `HOME`, `PATH`, `TERM`,
   and auxiliary-vector entries for the musl runtime. The scheduler saves
   x87/SSE state and the FS base used by TLS.
-* The `syscall` instruction uses Linux x86-64 argument registers and errno
-  values. The subset covers terminal I/O, RAMFS file descriptors and
-  directories, anonymous mappings, `brk`, time, entropy on CPUs with RDRAND,
-  TLS and IPv4 sockets. Dynamic linking, PIE, process fork, POSIX threads,
-  signal delivery and AVX are outside this ABI. Synchronous faults terminate
-  the foreground program and report exit status 128 plus the corresponding
-  signal number.
+* `int 0x80` selects the operation in `rax`, with arguments in `rdi`,
+  `rsi`, `rdx`, `r10`, `r8`, and `r9`. Signed results return in `rax`.
+  `sdk/abi.rs` defines Lumen's operation numbers and structures.
+  The musl bridge translates its internal operations and POSIX structures
+  in userspace.
+* The native calls cover file handles and directories, anonymous mappings,
+  TLS, time and entropy, IPv4 sockets, IPC, process management, and display input.
+  This environment currently supports single-threaded static executables.
+  Synchronous process faults return exit status 128 plus the signal number.
 * The BSP schedules userspace. Init and several device services still use
   the native flat-image ABI. The ELF syscall path has its own pointer
   validation, address-space lifecycle and descriptor table.

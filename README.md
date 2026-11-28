@@ -20,9 +20,10 @@ Working:
 - a userspace init that spawns a separate ring3 shell
 - FAT32 file and directory operations on an NVMe namespace through Lumfat
 - ACPI processor discovery and Rust kernel workers on secondary xAPIC CPUs
-- static x86-64 ELF processes with private address spaces and a musl syscall ABI
+- static x86-64 ELF processes with private address spaces and native Lumen syscalls and a musl libc port
 - Rust `std`, SQLite and DoomGeneric applications
-- QEMU Standard VGA graphics and RTL8139 networking with IPv4, TCP and UDP
+- QEMU Standard VGA graphics, PS/2 pointer input and RTL8139 IPv4 networking
+- Lumdesk windows, graphical tools and local accounts backed by NVMe
 
 The boot processor runs the userspace scheduler. Secondary processors run
 explicitly dispatched Rust kernel jobs.
@@ -46,6 +47,7 @@ git clone https://github.com/amogus-gggy/Lumfat.git
 git clone https://github.com/amogus-gggy/Lumfw.git
 git clone https://github.com/amogus-gggy/Lumgfx.git
 git clone https://github.com/amogus-gggy/Lumeth.git
+git clone https://github.com/amogus-gggy/Lumouse.git
 ```
 
 Example config:
@@ -88,7 +90,7 @@ Changes persist in `build/fat32.img`.
 
 Build and boot the optional ELF application archive with `make run-ports`.
 See [Static ELF applications](docs/ports.md) for dependencies, examples and
-toolchain commands.
+toolchain commands. Run `make run-desktop` for the [Lumdesk login and desktop](docs/desktop.md).
 
 ## Shape of it
 
@@ -117,6 +119,8 @@ src/fs/             vfs.c, ramfs.c
 src/exec/           legacy flat binary loader
 src/kernel/rust/user/ ELF process loader, syscall ABI and device integration
 ports/              ELF applications and build rules
+libc/               Lumen musl build and system interface
+desktop/            Lumdesk login manager, compositor and tools
 src/as/             address spaces
 src/ipc/            inter-thread messages
 src/user/           hello/, ld/ (prog.ld), blobs/
@@ -133,6 +137,7 @@ The `docs/` directory has the detail:
 | [Build system](docs/build.md) | `lumen.conf`, toolchains, linker scripts, flat binaries, adding a user program |
 | [Syscalls](docs/syscall.md) | the `int 0x80` ABI and full table, validation rules |
 | [Userspace](docs/userspace.md) | threads, address spaces, memory layout, init bootstrap, IPC |
+| [Lumdesk](docs/desktop.md) | graphical login, user accounts, windows and applications |
 | [Static ELF applications](docs/ports.md) | Rust and Clang toolchains, SQLite, Doom and IPv4 networking |
 | [Debugging](docs/debugging.md) | GDB recipes, capturing the console, troubleshooting table |
 
@@ -178,7 +183,7 @@ The `docs/` directory has the detail:
 - [x] VGA text-mode console
 - [x] PS/2 keyboard input
 - [x] QEMU Standard VGA linear framebuffer
-- [ ] Graphical interface
+- [x] Lumdesk graphical login, compositor and tools
 
 ## Contributing
 

@@ -25,6 +25,7 @@ extern void isr_xm();
 extern void isr_lapic_timer();
 extern void isr_pit();
 extern void isr_kbd();
+extern void isr_mouse();
 extern void isr_syscall();
 
 idt_entry_t IDT[256] = {0};
@@ -93,6 +94,7 @@ bool kidt_init() {
   idt_set_gate(0x13, isr_xm);
   idt_set_gate(0x20, isr_pit);
   idt_set_gate(0x21, isr_kbd);
+  idt_set_gate(0x2C, isr_mouse);
   idt_set_gate(LAPIC_TIMER_VECTOR, isr_lapic_timer);
   idt_set_gate_user(SYSCALL_VECTOR, isr_syscall);
 

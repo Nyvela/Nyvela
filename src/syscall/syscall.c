@@ -19,6 +19,7 @@
 #include "../../include/lumen/arch/x86_64/apic/apic.h"
 #include "../../include/lumen/kernel/rust.h"
 
+extern void lumen_process_syscall(syscall_frame_t *frame);
 extern void switch_context(context_t *context);
 
 static bool user_range_ok(uint64_t addr, uint64_t len) {
@@ -975,7 +976,7 @@ static void sys_nvme_claim(syscall_frame_t *f) {
 void syscall_handler(syscall_frame_t *f) {
   if (!f) return;
   if (current_thread && current_thread->elf_process) {
-    f->rax = (uint64_t)-38;
+    lumen_process_syscall(f);
     return;
   }
 

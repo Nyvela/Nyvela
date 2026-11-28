@@ -1,13 +1,11 @@
+mod accounts;
 mod arch;
 mod elf;
 mod graphics;
 mod memory;
 mod network;
+mod process;
 mod syscalls;
-
-use core::{ffi::c_char, ptr, slice};
-
-use crate::bindings;
 
 const DEAD: u32 = 3;
 
@@ -53,62 +51,11 @@ extern "C" fn lumen_user_memory_test() {
     }
 }
 
-#[unsafe(no_mangle)]
-unsafe extern "C" fn lumen_exec_elf(
-    path: *const c_char,
-    path_len: usize,
-    arguments: *const u8,
-    arguments_len: usize,
-    size: u64,
-) -> i64 {
-    let name = unsafe { slice::from_raw_parts(path.cast(), path_len) };
-    let args = unsafe { slice::from_raw_parts(arguments, arguments_len) };
-    let image = match unsafe { elf::load(path, name, args, size) } {
-        Ok(image) => image,
-        Err(error) => return error,
-    };
-    let process = unsafe { bindings::kmalloc(size_of::<syscalls::Process>() as u64) }
-        .cast::<syscalls::Process>();
-    if process.is_null() {
-        return -6;
-    }
-
-    let child = unsafe { spawn_thread(image.entry, image.space.0) };
-    if child.is_null() {
-        unsafe { bindings::kfree(process.cast()) };
-        return -6;
-    }
-    unsafe {
-        (*child).process = process.cast();
-        (*(*child).context).cs = 0x1b;
-        (*(*child).context).ss = 0x23;
-        (*(*child).context).registers[7] = image.stack;
-        process.write(syscalls::Process::new(image.space, image.brk));
-
-        while ptr::addr_of!((*child).state).read_volatile() != DEAD {
-            arch::wait_for_interrupt();
-        }
-
-        let status = (*child).exit_code;
-        let count = threads_length;
-        for i in 0..count {
-            if *threads.add(i) == child {
-                ptr::copy(threads.add(i + 1), threads.add(i), count - i - 1);
-                threads_length = count - 1;
-                break;
-            }
-        }
-        process.drop_in_place();
-        bindings::kfree(process.cast());
-        free_thread(child);
-        status
-    }
-}
-
 pub fn exit(status: i64) -> ! {
     unsafe {
         let current = current_thread;
         graphics::release((*current).tid);
+        process::terminate_children((*current).tid);
         (*current).exit_code = status;
         (*current).state = DEAD;
         scheduler_tick();

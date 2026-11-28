@@ -111,7 +111,8 @@ RUST_SOURCES := $(shell find $(RUST_DIR) -type f -name '*.rs') \
                 $(RUST_DIR)/Cargo.toml $(RUST_DIR)/Cargo.lock \
                 ../Lumfw/Cargo.toml $(wildcard ../Lumfw/src/*.rs) \
                 ../Lumgfx/Cargo.toml $(wildcard ../Lumgfx/src/*.rs) \
-                ../Lumeth/Cargo.toml $(wildcard ../Lumeth/src/*.rs)
+                ../Lumeth/Cargo.toml $(wildcard ../Lumeth/src/*.rs) \
+                ../Lumouse/Cargo.toml $(wildcard ../Lumouse/src/*.rs) sdk/abi.rs
 RUST_FLAGS := -C no-redzone=yes -C relocation-model=static -C code-model=small
 
 .PHONY: all clean run debug build-init fat-image
@@ -240,6 +241,15 @@ debug: $(IMAGE) $(QEMU_NVME_IMAGE)
 		-s -S
 
 clean:
-	rm -rf $(BUILD)
+	@if test -d "$(BUILD)"; then \
+		find "$(abspath $(BUILD))" -mindepth 1 -maxdepth 1 -exec sh -c '\
+			fat=$$1; nvme=$$2; shift 2; \
+			for artifact do \
+				case "$$fat" in "$$artifact"|"$$artifact"/*) continue;; esac; \
+				case "$$nvme" in "$$artifact"|"$$artifact"/*) continue;; esac; \
+				rm -rf -- "$$artifact" || exit; \
+			done' clean "$(abspath $(FAT_IMAGE))" "$(abspath $(QEMU_NVME_IMAGE))" {} +; \
+	fi
 
+include libc/libc.mk
 include ports/ports.mk

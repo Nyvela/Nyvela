@@ -14,7 +14,7 @@ use smoltcp::{
 };
 
 use super::{arch, memory, syscalls::ticks};
-use crate::{bindings, pci};
+use crate::{abi, bindings, pci};
 
 const ADDRESS: Ipv4Address = Ipv4Address::new(10, 0, 2, 15);
 const GATEWAY: Ipv4Address = Ipv4Address::new(10, 0, 2, 2);
@@ -25,7 +25,6 @@ const EAGAIN: i64 = -11;
 const EFAULT: i64 = -14;
 const EINVAL: i64 = -22;
 const EMSGSIZE: i64 = -90;
-const EAFNOSUPPORT: i64 = -97;
 const EADDRINUSE: i64 = -98;
 const EADDRNOTAVAIL: i64 = -99;
 const ENETDOWN: i64 = -100;
@@ -264,19 +263,16 @@ pub fn poll() {
     with(Network::poll);
 }
 
-pub fn open(family: u64, kind: u64, protocol: u64) -> Result<Socket, i64> {
-    if family != 2 {
-        return Err(EAFNOSUPPORT);
-    }
-    if kind & !(0x80000 | 0x800 | 0xf) != 0 {
+pub fn open(kind: u64, flags: u64) -> Result<Socket, i64> {
+    if flags & !abi::NONBLOCK != 0 {
         return Err(EINVAL);
     }
-    let tcp = match (kind & 0xf, protocol) {
-        (1, 0 | 6) => true,
-        (2, 0 | 17) => false,
-        _ => return Err(-93), // EPROTONOSUPPORT
+    let tcp = match kind {
+        abi::SOCKET_STREAM => true,
+        abi::SOCKET_DATAGRAM => false,
+        _ => return Err(-93),
     };
-    with(|network| network.allocate(tcp, kind & 0x800 != 0)).ok_or(ENETDOWN)?
+    with(|network| network.allocate(tcp, flags & abi::NONBLOCK != 0)).ok_or(ENETDOWN)?
 }
 
 impl Socket {
@@ -622,37 +618,23 @@ impl Socket {
     }
 }
 
-pub fn read_address(cr3: u64, address: u64, length: u64) -> Result<IpEndpoint, i64> {
-    let mut bytes = [0; 16];
-    if length < bytes.len() as u64 {
-        return Err(EINVAL);
-    }
+pub fn read_address(cr3: u64, address: u64) -> Result<IpEndpoint, i64> {
+    let mut bytes = [0; size_of::<abi::Endpoint>()];
     if !memory::copy_in(cr3, address, &mut bytes) {
         return Err(EFAULT);
     }
-    if u16::from_ne_bytes([bytes[0], bytes[1]]) != 2 {
-        return Err(EAFNOSUPPORT);
-    }
     Ok(IpEndpoint::new(
-        IpAddress::Ipv4(Ipv4Address::new(bytes[4], bytes[5], bytes[6], bytes[7])),
-        u16::from_be_bytes([bytes[2], bytes[3]]),
+        IpAddress::Ipv4(Ipv4Address::new(bytes[0], bytes[1], bytes[2], bytes[3])),
+        u16::from_ne_bytes([bytes[4], bytes[5]]),
     ))
 }
 
-pub fn write_address(cr3: u64, endpoint: IpEndpoint, address: u64, length: u64) -> i64 {
-    let mut supplied = [0; 4];
-    if !memory::copy_in(cr3, length, &mut supplied) {
-        return EFAULT;
-    }
-    let mut bytes = [0; 16];
-    bytes[..2].copy_from_slice(&2_u16.to_ne_bytes());
-    bytes[2..4].copy_from_slice(&endpoint.port.to_be_bytes());
+pub fn write_address(cr3: u64, endpoint: IpEndpoint, address: u64) -> i64 {
+    let mut bytes = [0; size_of::<abi::Endpoint>()];
     let IpAddress::Ipv4(ip) = endpoint.addr;
-    bytes[4..8].copy_from_slice(&ip.octets());
-    let count = (u32::from_ne_bytes(supplied) as usize).min(bytes.len());
-    if memory::copy_out(cr3, address, &bytes[..count])
-        && memory::copy_out(cr3, length, &(bytes.len() as u32).to_ne_bytes())
-    {
+    bytes[..4].copy_from_slice(&ip.octets());
+    bytes[4..].copy_from_slice(&endpoint.port.to_ne_bytes());
+    if memory::copy_out(cr3, address, &bytes) {
         0
     } else {
         EFAULT

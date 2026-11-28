@@ -19,6 +19,9 @@ extern "C" fn lumen_initrd() {
         }
         None => console.write("Initrd: malformed archive or insufficient RAM\n"),
     }
+    if firmware.file(b"opt/lumen/desktop").is_some() && ramfs::create(b"/.desktop", false) == 0 {
+        ramfs::write(b"/.desktop", b"1", 0);
+    }
 }
 
 fn import(file: &mut File<'_>) -> Option<usize> {

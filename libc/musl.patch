@@ -1,0 +1,181 @@
+diff --git a/arch/x86_64/syscall_arch.h b/arch/x86_64/syscall_arch.h
+index 92d5c17..ff513b8 100644
+--- a/arch/x86_64/syscall_arch.h
++++ b/arch/x86_64/syscall_arch.h
+@@ -4 +4,4 @@
+-static __inline long __syscall0(long n)
++__attribute__((visibility("hidden")))
++long __lumen_musl_call(long, long, long, long, long, long, long);
++
++static inline long __syscall0(long n)
+@@ -6,3 +9 @@ static __inline long __syscall0(long n)
+-	unsigned long ret;
+-	__asm__ __volatile__ ("syscall" : "=a"(ret) : "a"(n) : "rcx", "r11", "memory");
+-	return ret;
++	return __lumen_musl_call(n, 0, 0, 0, 0, 0, 0);
+@@ -11 +12 @@ static __inline long __syscall0(long n)
+-static __inline long __syscall1(long n, long a1)
++static inline long __syscall1(long n, long a)
+@@ -13,3 +14 @@ static __inline long __syscall1(long n, long a1)
+-	unsigned long ret;
+-	__asm__ __volatile__ ("syscall" : "=a"(ret) : "a"(n), "D"(a1) : "rcx", "r11", "memory");
+-	return ret;
++	return __lumen_musl_call(n, a, 0, 0, 0, 0, 0);
+@@ -18 +17 @@ static __inline long __syscall1(long n, long a1)
+-static __inline long __syscall2(long n, long a1, long a2)
++static inline long __syscall2(long n, long a, long b)
+@@ -20,4 +19 @@ static __inline long __syscall2(long n, long a1, long a2)
+-	unsigned long ret;
+-	__asm__ __volatile__ ("syscall" : "=a"(ret) : "a"(n), "D"(a1), "S"(a2)
+-						  : "rcx", "r11", "memory");
+-	return ret;
++	return __lumen_musl_call(n, a, b, 0, 0, 0, 0);
+@@ -26 +22 @@ static __inline long __syscall2(long n, long a1, long a2)
+-static __inline long __syscall3(long n, long a1, long a2, long a3)
++static inline long __syscall3(long n, long a, long b, long c)
+@@ -28,4 +24 @@ static __inline long __syscall3(long n, long a1, long a2, long a3)
+-	unsigned long ret;
+-	__asm__ __volatile__ ("syscall" : "=a"(ret) : "a"(n), "D"(a1), "S"(a2),
+-						  "d"(a3) : "rcx", "r11", "memory");
+-	return ret;
++	return __lumen_musl_call(n, a, b, c, 0, 0, 0);
+@@ -34 +27 @@ static __inline long __syscall3(long n, long a1, long a2, long a3)
+-static __inline long __syscall4(long n, long a1, long a2, long a3, long a4)
++static inline long __syscall4(long n, long a, long b, long c, long d)
+@@ -36,5 +29 @@ static __inline long __syscall4(long n, long a1, long a2, long a3, long a4)
+-	unsigned long ret;
+-	register long r10 __asm__("r10") = a4;
+-	__asm__ __volatile__ ("syscall" : "=a"(ret) : "a"(n), "D"(a1), "S"(a2),
+-						  "d"(a3), "r"(r10): "rcx", "r11", "memory");
+-	return ret;
++	return __lumen_musl_call(n, a, b, c, d, 0, 0);
+@@ -43 +32 @@ static __inline long __syscall4(long n, long a1, long a2, long a3, long a4)
+-static __inline long __syscall5(long n, long a1, long a2, long a3, long a4, long a5)
++static inline long __syscall5(long n, long a, long b, long c, long d, long e)
+@@ -45,6 +34 @@ static __inline long __syscall5(long n, long a1, long a2, long a3, long a4, long
+-	unsigned long ret;
+-	register long r10 __asm__("r10") = a4;
+-	register long r8 __asm__("r8") = a5;
+-	__asm__ __volatile__ ("syscall" : "=a"(ret) : "a"(n), "D"(a1), "S"(a2),
+-						  "d"(a3), "r"(r10), "r"(r8) : "rcx", "r11", "memory");
+-	return ret;
++	return __lumen_musl_call(n, a, b, c, d, e, 0);
+@@ -53 +37 @@ static __inline long __syscall5(long n, long a1, long a2, long a3, long a4, long
+-static __inline long __syscall6(long n, long a1, long a2, long a3, long a4, long a5, long a6)
++static inline long __syscall6(long n, long a, long b, long c, long d, long e, long f)
+@@ -55,7 +39 @@ static __inline long __syscall6(long n, long a1, long a2, long a3, long a4, long
+-	unsigned long ret;
+-	register long r10 __asm__("r10") = a4;
+-	register long r8 __asm__("r8") = a5;
+-	register long r9 __asm__("r9") = a6;
+-	__asm__ __volatile__ ("syscall" : "=a"(ret) : "a"(n), "D"(a1), "S"(a2),
+-						  "d"(a3), "r"(r10), "r"(r8), "r"(r9) : "rcx", "r11", "memory");
+-	return ret;
++	return __lumen_musl_call(n, a, b, c, d, e, f);
+@@ -64,6 +41,0 @@ static __inline long __syscall6(long n, long a1, long a2, long a3, long a4, long
+-#define VDSO_USEFUL
+-#define VDSO_CGT_SYM "__vdso_clock_gettime"
+-#define VDSO_CGT_VER "LINUX_2.6"
+-#define VDSO_GETCPU_SYM "__vdso_getcpu"
+-#define VDSO_GETCPU_VER "LINUX_2.6"
+-
+diff --git a/src/process/x86_64/vfork.s b/src/process/x86_64/vfork.s
+index 9114439..2a09150 100644
+--- a/src/process/x86_64/vfork.s
++++ b/src/process/x86_64/vfork.s
+@@ -4,5 +4 @@ vfork:
+-	pop %rdx
+-	mov $58,%eax
+-	syscall
+-	push %rdx
+-	mov %rax,%rdi
++	mov $-38,%rdi
+diff --git a/src/signal/x86_64/restore.s b/src/signal/x86_64/restore.s
+index 27d6cf3..3493709 100644
+--- a/src/signal/x86_64/restore.s
++++ b/src/signal/x86_64/restore.s
+@@ -6,2 +6 @@ __restore_rt:
+-	mov $15, %rax
+-	syscall
++	ud2
+diff --git a/src/thread/x86_64/__set_thread_area.s b/src/thread/x86_64/__set_thread_area.s
+index 7347ff4..64bceed 100644
+--- a/src/thread/x86_64/__set_thread_area.s
++++ b/src/thread/x86_64/__set_thread_area.s
+@@ -4,0 +5 @@
++.hidden __lumen_musl_tls
+@@ -7,5 +8 @@ __set_thread_area:
+-	mov %rdi,%rsi           /* shift for syscall */
+-	movl $0x1002,%edi       /* SET_FS register */
+-	movl $158,%eax          /* set fs segment to */
+-	syscall                 /* arch_prctl(SET_FS, arg)*/
+-	ret
++	jmp __lumen_musl_tls
+diff --git a/src/thread/x86_64/__unmapself.s b/src/thread/x86_64/__unmapself.s
+index e2689e6..64c039c 100644
+--- a/src/thread/x86_64/__unmapself.s
++++ b/src/thread/x86_64/__unmapself.s
+@@ -6,5 +6,3 @@ __unmapself:
+-	movl $11,%eax   /* SYS_munmap */
+-	syscall         /* munmap(arg2,arg3) */
+-	xor %rdi,%rdi   /* exit() args: always return success */
+-	movl $60,%eax   /* SYS_exit */
+-	syscall         /* exit(0) */
++	xor %edi,%edi
++	.hidden __lumen_musl_exit
++	jmp __lumen_musl_exit
+diff --git a/src/thread/x86_64/clone.s b/src/thread/x86_64/clone.s
+index 6e47bc0..164a6ab 100644
+--- a/src/thread/x86_64/clone.s
++++ b/src/thread/x86_64/clone.s
+@@ -6,23 +6,2 @@ __clone:
+-	xor %eax,%eax
+-	mov $56,%al
+-	mov %rdi,%r11
+-	mov %rdx,%rdi
+-	mov %r8,%rdx
+-	mov %r9,%r8
+-	mov 8(%rsp),%r10
+-	mov %r11,%r9
+-	and $-16,%rsi
+-	sub $8,%rsi
+-	mov %rcx,(%rsi)
+-	syscall
+-	test %eax,%eax
+-	jnz 1f
+-	xor %ebp,%ebp
+-	pop %rdi
+-	call *%r9
+-	mov %eax,%edi
+-	xor %eax,%eax
+-	mov $60,%al
+-	syscall
+-	hlt
+-1:	ret
++	mov $-38,%rax
++	ret
+diff --git a/src/thread/x86_64/syscall_cp.s b/src/thread/x86_64/syscall_cp.s
+index 4f10171..b84bc3e 100644
+--- a/src/thread/x86_64/syscall_cp.s
++++ b/src/thread/x86_64/syscall_cp.s
+@@ -18,10 +18,10 @@ __cp_begin:
+-	mov %rdi,%r11
+-	mov %rsi,%rax
+-	mov %rdx,%rdi
+-	mov %rcx,%rsi
+-	mov %r8,%rdx
+-	mov %r9,%r10
+-	mov 8(%rsp),%r8
+-	mov 16(%rsp),%r9
+-	mov %r11,8(%rsp)
+-	syscall
++	mov %rsi,%rdi
++	mov %rdx,%rsi
++	mov %rcx,%rdx
++	mov %r8,%rcx
++	mov %r9,%r8
++	mov 8(%rsp),%r9
++	mov 16(%rsp),%rax
++	mov %rax,8(%rsp)
++	.hidden __lumen_musl_call
++	jmp __lumen_musl_call

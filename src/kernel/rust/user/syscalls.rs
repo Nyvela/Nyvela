@@ -1,4 +1,9 @@
-//! Static x86-64 musl process ABI. Native Lumen services still use int 0x80.
+//! Lumen native application syscalls for isolated ELF processes.
+use super::{
+    accounts,
+    process::{self, Identity},
+};
+use crate::abi;
 use core::ptr;
 
 use super::{Context, Thread, arch, current_thread, exit, memory, network};
@@ -8,7 +13,6 @@ use memory::{MAP_END, MAP_FIRST, NO_ACCESS, NX, PAGE, PRESENT, Space, WRITE};
 const EPERM: i64 = -1;
 const ENOENT: i64 = -2;
 const EBADF: i64 = -9;
-const EAGAIN: i64 = -11;
 const ENOMEM: i64 = -12;
 const EACCES: i64 = -13;
 const EFAULT: i64 = -14;
@@ -17,12 +21,11 @@ const ENOTDIR: i64 = -20;
 const EISDIR: i64 = -21;
 const EINVAL: i64 = -22;
 const EMFILE: i64 = -24;
-const ENOTTY: i64 = -25;
 const ENOSPC: i64 = -28;
 const ESPIPE: i64 = -29;
 const ENAMETOOLONG: i64 = -36;
 const ENOSYS: i64 = -38;
-const AT_FDCWD: u64 = -100_i64 as u64;
+const AT_FDCWD: u64 = abi::CURRENT_DIRECTORY;
 const PATH_MAX: usize = 256;
 const FDS: usize = 10;
 const IO_MAX: usize = 1024 * 1024;
@@ -73,6 +76,7 @@ struct Fd {
     flags: u64,
     socket: Option<network::Socket>,
     file: Option<ramfs::Handle>,
+    owner: u32,
 }
 
 impl Fd {
@@ -81,6 +85,7 @@ impl Fd {
         flags: 0,
         socket: None,
         file: None,
+        owner: 0,
     };
 
     fn occupied(&self) -> bool {
@@ -90,6 +95,7 @@ impl Fd {
 
 pub struct Process {
     space: Space,
+    identity: Identity,
     brk_start: u64,
     brk: u64,
     map_hint: u64,
@@ -98,9 +104,10 @@ pub struct Process {
 }
 
 impl Process {
-    pub fn new(space: Space, brk: u64) -> Self {
+    pub fn new(space: Space, brk: u64, identity: Identity) -> Self {
         Self {
             space,
+            identity,
             brk_start: brk,
             brk,
             map_hint: MAP_FIRST,
@@ -158,12 +165,12 @@ impl Process {
         }
     }
 
-    fn socket_open(&mut self, family: u64, kind: u64, protocol: u64) -> i64 {
+    fn socket_open(&mut self, kind: u64, flags: u64) -> i64 {
         let slot = match self.vacant() {
             Ok(slot) => slot,
             Err(error) => return error,
         };
-        match network::open(family, kind, protocol) {
+        match network::open(kind, flags) {
             Ok(socket) => {
                 self.fds[slot].socket = Some(socket);
                 slot as i64 + 3
@@ -172,15 +179,15 @@ impl Process {
         }
     }
 
-    fn socket_address(&mut self, call: u64, fd: u64, address: u64, length: u64) -> i64 {
-        let endpoint = match network::read_address(self.space.0, address, length) {
+    fn socket_address(&mut self, connect: bool, fd: u64, address: u64) -> i64 {
+        let endpoint = match network::read_address(self.space.0, address) {
             Ok(endpoint) => endpoint,
             Err(error) => return error,
         };
         self.socket(fd).map_or_else(
             |error| error,
             |socket| {
-                if call == 42 {
+                if connect {
                     socket.connect(endpoint)
                 } else {
                     socket.bind(endpoint)
@@ -189,16 +196,16 @@ impl Process {
         )
     }
 
-    fn socket_name(&mut self, peer: bool, fd: u64, address: u64, length: u64) -> i64 {
+    fn socket_name(&mut self, peer: bool, fd: u64, address: u64) -> i64 {
         let cr3 = self.space.0;
         match self.socket(fd).and_then(|socket| socket.address(peer)) {
-            Ok(endpoint) => network::write_address(cr3, endpoint, address, length),
+            Ok(endpoint) => network::write_address(cr3, endpoint, address),
             Err(error) => error,
         }
     }
 
-    fn socket_accept(&mut self, fd: u64, address: u64, length: u64, flags: u64) -> i64 {
-        if flags & !(0x800 | 0x80000) != 0 {
+    fn socket_accept(&mut self, fd: u64, address: u64, flags: u64) -> i64 {
+        if flags & !abi::NONBLOCK != 0 {
             return EINVAL;
         }
         let slot = match self.vacant() {
@@ -207,14 +214,14 @@ impl Process {
         };
         let socket = match self
             .socket(fd)
-            .and_then(|socket| socket.accept(flags & 0x800 != 0))
+            .and_then(|socket| socket.accept(flags & abi::NONBLOCK != 0))
         {
             Ok(socket) => socket,
             Err(error) => return error,
         };
         if address != 0 {
             let written = match socket.address(true) {
-                Ok(peer) => network::write_address(self.space.0, peer, address, length),
+                Ok(peer) => network::write_address(self.space.0, peer, address),
                 Err(error) => error,
             };
             if written != 0 {
@@ -226,23 +233,15 @@ impl Process {
         slot as i64 + 3
     }
 
-    fn socket_write(
-        &mut self,
-        fd: u64,
-        data: u64,
-        size: u64,
-        flags: u64,
-        address: u64,
-        length: u64,
-    ) -> i64 {
-        if flags & !(0x40 | 0x4000) != 0 {
+    fn socket_write(&mut self, fd: u64, data: u64, size: u64, flags: u64, address: u64) -> i64 {
+        if flags & !abi::NONBLOCK != 0 {
             return -95; // EOPNOTSUPP
         }
         let cr3 = self.space.0;
         let destination = if address == 0 {
             None
         } else {
-            match network::read_address(cr3, address, length) {
+            match network::read_address(cr3, address) {
                 Ok(endpoint) => Some(endpoint),
                 Err(error) => return error,
             }
@@ -260,19 +259,11 @@ impl Process {
         if !memory::copy_in(cr3, data, bytes) {
             return EFAULT;
         }
-        socket.send(bytes, destination, flags & 0x40 != 0)
+        socket.send(bytes, destination, flags & abi::NONBLOCK != 0)
     }
 
-    fn socket_read(
-        &mut self,
-        fd: u64,
-        data: u64,
-        size: u64,
-        flags: u64,
-        address: u64,
-        length: u64,
-    ) -> i64 {
-        if flags & !0x40 != 0 {
+    fn socket_read(&mut self, fd: u64, data: u64, size: u64, flags: u64, address: u64) -> i64 {
+        if flags & !abi::NONBLOCK != 0 {
             return -95; // EOPNOTSUPP
         }
         let cr3 = self.space.0;
@@ -284,7 +275,7 @@ impl Process {
         }
         let (received, source) = match self
             .socket(fd)
-            .and_then(|socket| socket.receive(bytes, flags & 0x40 != 0))
+            .and_then(|socket| socket.receive(bytes, flags & abi::NONBLOCK != 0))
         {
             Ok(result) => result,
             Err(error) => return error,
@@ -292,7 +283,7 @@ impl Process {
         if let Some(source) = source
             && address != 0
         {
-            let written = network::write_address(cr3, source, address, length);
+            let written = network::write_address(cr3, source, address);
             if written != 0 {
                 return written;
             }
@@ -300,98 +291,36 @@ impl Process {
         out(cr3, data, &bytes[..received], received as i64)
     }
 
-    fn socket_option(
-        &mut self,
-        set: bool,
-        fd: u64,
-        level: u64,
-        option: u64,
-        value: u64,
-        length: u64,
-    ) -> i64 {
-        let cr3 = self.space.0;
+    fn socket_option(&mut self, fd: u64, option: u64, set: bool, value: u64) -> i64 {
         let socket = match self.socket(fd) {
             Ok(socket) => socket,
             Err(error) => return error,
         };
-        if level != 1 {
-            return -92; // ENOPROTOOPT
-        }
-        if set {
-            if option == 2 {
-                if length < 4 {
-                    return EINVAL;
-                }
-                let mut flag = [0; 4];
-                if !memory::copy_in(cr3, value, &mut flag) {
-                    return EFAULT;
-                }
-                socket.reuse_address = i32::from_ne_bytes(flag) != 0;
-                return 0;
-            }
-            if !matches!(option, 20 | 21 | 66 | 67) {
-                return -92;
-            }
-            let mut time = [0; 16];
-            if length < 16 {
-                return EINVAL;
-            }
-            if !memory::copy_in(cr3, value, &mut time) {
-                return EFAULT;
-            }
-            let seconds = i64::from_ne_bytes(time[..8].try_into().unwrap());
-            let micros = i64::from_ne_bytes(time[8..].try_into().unwrap());
-            if seconds < 0 || !(0..1_000_000).contains(&micros) {
-                return EINVAL;
-            }
-            let milliseconds = (seconds as u64)
-                .saturating_mul(1000)
-                .saturating_add((micros as u64).div_ceil(1000));
-            if matches!(option, 20 | 66) {
-                socket.read_timeout = milliseconds;
-            } else {
-                socket.write_timeout = milliseconds;
-            }
-            return 0;
-        }
-        let mut supplied = [0; 4];
-        if !memory::copy_in(cr3, length, &mut supplied) {
-            return EFAULT;
-        }
-        let mut option_bytes = [0; 16];
-        let size = match option {
-            2 => {
-                option_bytes[..4].copy_from_slice(&i32::from(socket.reuse_address).to_ne_bytes());
-                4
-            }
-            3 => {
-                let kind = if socket.is_stream() { 1_i32 } else { 2_i32 };
-                option_bytes[..4].copy_from_slice(&kind.to_ne_bytes());
-                4
-            }
-            4 => {
-                option_bytes[..4].copy_from_slice(&socket.pending_error().to_ne_bytes());
-                4
-            }
-            20 | 21 | 66 | 67 => {
-                let ms = if matches!(option, 20 | 66) {
-                    socket.read_timeout
+        match (option, set) {
+            (abi::SOCKET_KIND, false) => {
+                if socket.is_stream() {
+                    1
                 } else {
-                    socket.write_timeout
-                };
-                option_bytes[..8].copy_from_slice(&(ms / 1000).to_ne_bytes());
-                option_bytes[8..].copy_from_slice(&((ms % 1000) * 1000).to_ne_bytes());
-                16
+                    2
+                }
             }
-            _ => return -92,
-        };
-        let count = (u32::from_ne_bytes(supplied) as usize).min(size);
-        if memory::copy_out(cr3, value, &option_bytes[..count])
-            && memory::copy_out(cr3, length, &(size as u32).to_ne_bytes())
-        {
-            0
-        } else {
-            EFAULT
+            (abi::SOCKET_ERROR, false) => i64::from(socket.pending_error()),
+            (abi::SOCKET_REUSE, false) => i64::from(socket.reuse_address),
+            (abi::SOCKET_READ_TIMEOUT, false) => socket.read_timeout as i64,
+            (abi::SOCKET_WRITE_TIMEOUT, false) => socket.write_timeout as i64,
+            (abi::SOCKET_REUSE, true) => {
+                socket.reuse_address = value != 0;
+                0
+            }
+            (abi::SOCKET_READ_TIMEOUT, true) => {
+                socket.read_timeout = value.min(i64::MAX as u64);
+                0
+            }
+            (abi::SOCKET_WRITE_TIMEOUT, true) => {
+                socket.write_timeout = value.min(i64::MAX as u64);
+                0
+            }
+            _ => -92,
         }
     }
 
@@ -414,8 +343,13 @@ impl Process {
                 if dir != AT_FDCWD {
                     return Err(EBADF);
                 }
-                result.path[0] = b'/';
-                length = 1;
+                let mut home = [0; 32];
+                length = accounts::home(self.identity.account, &mut home);
+                result.path[..length].copy_from_slice(&home[..length]);
+                if length != 1 {
+                    result.path[length] = b'/';
+                    length += 1;
+                }
             }
             if length == PATH_MAX {
                 return Err(ENAMETOOLONG);
@@ -459,36 +393,59 @@ impl Process {
         Ok(normal)
     }
 
+    // Accounts have a private home tree. System executables and the bundled
+    // game data are shared read-only. Boot services retain their own ABI.
+    fn can_access(&self, path: &[u8], write: bool) -> bool {
+        if self.identity.account.uid == 0 {
+            return true;
+        }
+        let mut home = [0; 32];
+        let length = accounts::home(self.identity.account, &mut home);
+        let home = &home[..length];
+        (!write && path == home)
+            || (path.starts_with(home) && path.get(length) == Some(&b'/'))
+            || (!write
+                && (path == b"/bin"
+                    || path.starts_with(b"/bin/")
+                    || matches!(path, b"/freedoom1.wad" | b"/readme.txt")))
+    }
+
     fn open(&mut self, dir: u64, address: u64, flags: u64) -> i64 {
         let path = match self.path(dir, address) {
             Ok(path) => path,
             Err(error) => return error,
         };
+        if flags & (abi::OPEN_READ | abi::OPEN_WRITE) == 0 || flags & !255 != 0 {
+            return EINVAL;
+        }
+        let write = flags & (abi::OPEN_WRITE | abi::OPEN_CREATE | abi::OPEN_TRUNCATE) != 0;
+        if !self.can_access(path.path(), write) {
+            return EACCES;
+        }
         let Ok(slot) = self.vacant() else {
             return EMFILE;
         };
-        if flags & 3 == 3 {
-            return EINVAL;
-        }
         match ramfs::stat(path.path()) {
             Ok((directory, _)) => {
-                if flags & 0xc0 == 0xc0 {
+                if flags & (abi::OPEN_CREATE | abi::OPEN_EXCLUSIVE)
+                    == abi::OPEN_CREATE | abi::OPEN_EXCLUSIVE
+                {
                     return EEXIST;
                 }
-                if directory && flags & 3 != 0 {
+                if directory && flags & abi::OPEN_WRITE != 0 {
                     return EISDIR;
                 }
-                if !directory && flags & 0x10000 != 0 {
+                if !directory && flags & abi::OPEN_DIRECTORY != 0 {
                     return ENOTDIR;
                 }
-                if flags & 0x200 != 0 && flags & 3 != 0 {
+                if flags & abi::OPEN_TRUNCATE != 0 && flags & abi::OPEN_WRITE != 0 {
                     let error = ramfs::truncate(path.path(), 0);
                     if error != 0 {
                         return fs_error(error);
                     }
                 }
             }
-            Err(-2) if flags & 0x40 != 0 => {
+            Err(-2) if flags & abi::OPEN_CREATE != 0 && flags & abi::OPEN_DIRECTORY == 0 => {
                 let error = ramfs::create(path.path(), false);
                 if error != 0 {
                     return fs_error(error);
@@ -503,6 +460,7 @@ impl Process {
         self.fds[slot] = Fd {
             flags,
             file,
+            owner: accounts::owner(path.path()),
             ..Fd::EMPTY
         };
         slot as i64 + 3
@@ -511,7 +469,7 @@ impl Process {
     fn read(&mut self, fd: u64, address: u64, len: u64, offset: Option<u64>) -> i64 {
         if self.socket(fd).is_ok() {
             return if offset.is_none() {
-                self.socket_read(fd, address, len, 0, 0, 0)
+                self.socket_read(fd, address, len, 0, 0)
             } else {
                 ESPIPE
             };
@@ -529,7 +487,7 @@ impl Process {
             if offset.is_some() {
                 return ESPIPE;
             }
-            if length == 0 {
+            if length == 0 || self.identity.captured {
                 return 0;
             }
             let mut count = 0;
@@ -555,7 +513,7 @@ impl Process {
             Ok(file) => file,
             Err(error) => return error,
         };
-        if file.flags & 3 == 1 {
+        if file.flags & abi::OPEN_READ == 0 {
             return EBADF;
         }
         let start = offset.unwrap_or(file.position);
@@ -589,7 +547,7 @@ impl Process {
     fn write(&mut self, fd: u64, address: u64, len: u64, offset: Option<u64>) -> i64 {
         if self.socket(fd).is_ok() {
             return if offset.is_none() {
-                self.socket_write(fd, address, len, 0, 0, 0)
+                self.socket_write(fd, address, len, 0, 0)
             } else {
                 ESPIPE
             };
@@ -607,6 +565,19 @@ impl Process {
             if offset.is_some() {
                 return ESPIPE;
             }
+            if self.identity.captured && length != 0 {
+                let tid = unsafe { (*current_thread).tid };
+                let count = length.min(abi::IPC_MAX);
+                let result = process::send(
+                    tid,
+                    self.identity,
+                    cr3,
+                    self.identity.parent,
+                    address,
+                    count as u64,
+                );
+                return if result == 1 { count as i64 } else { result };
+            }
             let mut written = 0;
             while written < length {
                 let count = buffer.len().min(length - written);
@@ -621,11 +592,11 @@ impl Process {
             Ok(file) => file,
             Err(error) => return error,
         };
-        if file.flags & 3 == 0 {
+        if file.flags & abi::OPEN_WRITE == 0 {
             return EBADF;
         }
         let handle = file.file.as_ref().unwrap();
-        let start = if file.flags & 0x400 != 0 {
+        let start = if file.flags & abi::OPEN_APPEND != 0 {
             handle.stat().1 as u64
         } else {
             offset.unwrap_or(file.position)
@@ -680,55 +651,53 @@ impl Process {
         position as i64
     }
 
-    fn stat(&mut self, dir: u64, source: u64, out: u64, flags: u64) -> i64 {
-        let result = if flags & 0x1000 != 0 {
-            let mut byte = [0];
-            if !memory::copy_in(self.space.0, source, &mut byte) {
-                return EFAULT;
-            }
-            if byte[0] == 0 {
-                return self.fstat(dir, out);
-            }
-            self.path(dir, source)
-        } else {
-            self.path(dir, source)
+    fn info_path(&self, dir: u64, source: u64, address: u64) -> i64 {
+        let path = match self.path(dir, source) {
+            Ok(path) => path,
+            Err(error) => return error,
         };
-        match result {
-            Ok(path) => self.stat_path(path.path(), out),
-            Err(error) => error,
+        if !self.can_access(path.path(), false) {
+            return EACCES;
         }
-    }
-
-    fn stat_path(&self, path: &[u8], out: u64) -> i64 {
-        match ramfs::stat_with_inode(path) {
-            Ok((directory, size, inode)) => stat_to_user(
+        match ramfs::stat_with_inode(path.path()) {
+            Ok((directory, size, inode)) => file_info(
                 self.space.0,
-                out,
-                if directory { 0o40777 } else { 0o100666 },
-                size,
+                address,
                 inode,
+                size,
+                if directory {
+                    abi::FILE_DIRECTORY
+                } else {
+                    abi::FILE_REGULAR
+                },
+                accounts::owner(path.path()),
             ),
             Err(error) => fs_error(error),
         }
     }
 
-    fn fstat(&mut self, fd: u64, address: u64) -> i64 {
+    fn info_handle(&mut self, fd: u64, address: u64) -> i64 {
         let cr3 = self.space.0;
         if self.standard_open(fd) {
-            return stat_to_user(cr3, address, 0o20666, 0, 2);
+            return file_info(cr3, address, 2, 0, abi::FILE_CONSOLE, 0);
         }
         match self.descriptor(fd) {
+            Ok(slot) if slot.socket.is_some() => {
+                file_info(cr3, address, fd, 0, abi::FILE_SOCKET, 0)
+            }
             Ok(slot) => {
-                if slot.socket.is_some() {
-                    return stat_to_user(cr3, address, 0o140666, 0, fd);
-                }
                 let (directory, size, inode) = slot.file.as_ref().unwrap().stat();
-                stat_to_user(
+                file_info(
                     cr3,
                     address,
-                    if directory { 0o40777 } else { 0o100666 },
-                    size,
                     inode,
+                    size,
+                    if directory {
+                        abi::FILE_DIRECTORY
+                    } else {
+                        abi::FILE_REGULAR
+                    },
+                    slot.owner,
                 )
             }
             Err(error) => error,
@@ -744,11 +713,11 @@ impl Process {
         let Some(perms) = page_permissions(prot) else {
             return EACCES;
         };
-        if flags & 0x20 == 0 || flags & 3 != 2 {
-            return ENOSYS;
+        if flags & !abi::MAP_FIXED != 0 {
+            return EINVAL;
         }
 
-        let fixed = flags & (0x10 | 0x100000) != 0;
+        let fixed = flags & abi::MAP_FIXED != 0;
         let mut start = if address != 0 {
             memory::page_floor(address)
         } else {
@@ -859,146 +828,117 @@ impl Process {
         address as i64
     }
 
-    fn iov(&mut self, write: bool, fd: u64, vectors: u64, count: u64) -> i64 {
-        if count > 1024 {
-            return EINVAL;
-        }
-        let mut total = 0;
-        for i in 0..count {
-            let Some(address) = vectors.checked_add(i * 16) else {
-                return EFAULT;
-            };
-            let mut iov = [0; 16];
-            if !memory::copy_in(self.space.0, address, &mut iov) {
-                return if total == 0 { EFAULT } else { total };
-            }
-            let base = u64::from_ne_bytes(iov[..8].try_into().unwrap());
-            let length = u64::from_ne_bytes(iov[8..].try_into().unwrap()).min(IO_MAX as u64);
-            let result = if write {
-                self.write(fd, base, length, None)
-            } else {
-                self.read(fd, base, length, None)
-            };
-            if result < 0 {
-                return if total == 0 { result } else { total };
-            }
-            total += result;
-            if result as u64 != length || (!write && fd == 0 && result > 0) {
-                break;
-            }
-        }
-        total
-    }
-
     fn call(&mut self, frame: &Frame, thread: *mut Thread) -> i64 {
         let cr3 = self.space.0;
-        let (a, b, c, d, e, f) = (
-            frame.rdi, frame.rsi, frame.rdx, frame.r10, frame.r8, frame.r9,
-        );
+        let tid = unsafe { (*thread).tid };
+        let (a, b, c, d, e) = (frame.rdi, frame.rsi, frame.rdx, frame.r10, frame.r8);
         match frame.rax {
-            0 => self.read(a, b, c, None),
-            1 => self.write(a, b, c, None),
-            2 => self.open(AT_FDCWD, a, b),
-            3 => self.close(a),
-            4 | 6 => self.stat(AT_FDCWD, a, b, 0),
-            5 => self.fstat(a, b),
-            7 => self.poll(a, b, c as i32),
-            8 => self.seek(a, b as i64, c),
-            9 => self.map(a, b, c, d),
-            10 => self.protect(a, b, c),
-            11 => self.unmap(a, b),
-            12 => self.brk(a),
-            13 | 14 | 28 | 131 => 0, // signal bookkeeping and memory advice
-            16 => {
-                if self.standard_open(a) && a == 1 {
-                    super::graphics::ioctl(unsafe { (*thread).tid }, cr3, b, c).unwrap_or(ENOTTY)
-                } else if !self.standard_open(a) && self.descriptor(a).is_err() {
-                    EBADF
-                } else {
-                    ENOTTY
+            abi::EXIT => exit((a & 255) as i64),
+            abi::WRITE => self.write(a, b, c, None),
+            abi::READ => self.read(a, b, c, None),
+            abi::YIELD => sleep(0),
+            abi::SELF => tid as i64,
+            abi::UPTIME => ticks() as i64,
+            abi::SEND => process::send(tid, self.identity, cr3, a, b, c),
+            abi::RECEIVE => process::receive(cr3, a, b, c),
+            abi::SPAWN => match self.path(abi::CURRENT_DIRECTORY, a) {
+                Ok(path) if self.can_access(path.path(), false) => {
+                    process::spawn_from(tid, self.identity, cr3, path.path(), b, c, d, e)
+                }
+                Ok(_) => EACCES,
+                Err(error) => error,
+            },
+            abi::WAIT => process::wait(tid, a, b != 0),
+            abi::IDENTITY => match a {
+                0 => i64::from(self.identity.account.uid),
+                1 => i64::from(self.identity.account.admin),
+                2 => self.identity.parent as i64,
+                _ => EINVAL,
+            },
+            abi::ACCOUNT_REGISTER if self.identity.account.uid == 0 => accounts::register(cr3, a),
+            abi::ACCOUNT_REGISTER => EPERM,
+            abi::ACCOUNT_DESCRIBE => {
+                if self.identity.account.uid != 0 && a != u64::from(self.identity.account.uid) {
+                    return EPERM;
+                }
+                match u32::try_from(a).ok().and_then(accounts::lookup) {
+                    Some(account) => accounts::describe(account, cr3, b),
+                    None => ENOENT,
                 }
             }
-            17 => self.read(a, b, c, Some(d)),
-            18 => self.write(a, b, c, Some(d)),
-            19 => self.iov(false, a, b, c),
-            20 => self.iov(true, a, b, c),
-            21 => self.access(AT_FDCWD, a),
-            24 => {
-                arch::wait_for_interrupt();
-                0
-            }
-            35 => sleep(cr3, a),
-            39 | 186 | 218 => unsafe { (*thread).tid as i64 },
-            41 => self.socket_open(a, b, c),
-            42 | 49 => self.socket_address(frame.rax, a, b, c),
-            43 => self.socket_accept(a, b, c, 0),
-            44 => self.socket_write(a, b, c, d, e, f),
-            45 => self.socket_read(a, b, c, d, e, f),
-            48 => self
-                .socket(a)
-                .map_or_else(|error| error, |socket| socket.shutdown(b)),
-            50 => self
-                .socket(a)
-                .map_or_else(|error| error, |socket| socket.listen()),
-            51 | 52 => self.socket_name(frame.rax == 52, a, b, c),
-            54 | 55 => self.socket_option(frame.rax == 54, a, b, c, d, e),
-            60 | 231 => exit((a & 255) as i64),
-            63 => uname(cr3, a),
-            72 => self.fcntl(a, b, c),
-            74 | 75 => self.regular_fd(a).map_or_else(|error| error, |_| 0),
-            77 => match self.regular_fd(a) {
-                Ok(file) if file.flags & 3 != 0 => {
+            abi::OPEN => self.open(c, a, b),
+            abi::CLOSE => self.close(a),
+            abi::READ_AT => self.read(a, b, c, Some(d)),
+            abi::WRITE_AT => self.write(a, b, c, Some(d)),
+            abi::INFO_PATH => self.info_path(c, a, b),
+            abi::INFO_HANDLE => self.info_handle(a, b),
+            abi::SEEK => self.seek(a, b as i64, c),
+            abi::RESIZE_FILE => match self.regular_fd(a) {
+                Ok(file) if file.flags & abi::OPEN_WRITE != 0 => {
                     fs_result(file.file.as_ref().unwrap().truncate(b))
                 }
                 Ok(_) => EINVAL,
                 Err(error) => error,
             },
-            79 if b >= 2 => out(cr3, a, b"/\0", 2),
-            79 => -34, // ERANGE
-            82 => self.rename(AT_FDCWD, a, AT_FDCWD, b),
-            83 => self.make_dir(AT_FDCWD, a),
-            84 => self.remove_dir(AT_FDCWD, a),
-            87 => self.unlink(AT_FDCWD, a),
-            89 => ENOENT,
-            96 => timestamp(cr3, a, true),
-            97 => getrlimit(cr3, a, b),
-            102 | 104 | 107 | 108 => 1000,
-            110 => 1,
-            158 => arch_prctl(cr3, unsafe { (*thread).context }, a, b),
-            202 => futex(cr3, a, b, c),
-            204 => {
-                if b == 0 {
-                    EINVAL
+            abi::SYNC_FILE => self.regular_fd(a).map_or_else(|error| error, |_| 0),
+            abi::CREATE_DIRECTORY => self.make_dir(b, a),
+            abi::REMOVE_PATH if c == 0 => self.unlink(b, a),
+            abi::REMOVE_PATH if c == 1 => self.remove_dir(b, a),
+            abi::MOVE_PATH => self.rename(b, a, d, c),
+            abi::READ_DIRECTORY => self.read_directory(a, b),
+            abi::WORKING_DIRECTORY => {
+                let mut path = [0; 32];
+                let length = accounts::home(self.identity.account, &mut path) + 1;
+                if b < length as u64 {
+                    -34
                 } else {
-                    out(cr3, c, &[1], 1)
+                    out(cr3, a, &path[..length], length as i64)
                 }
             }
-            217 => self.getdents(a, b, c),
-            228 => match a {
-                0 | 1 | 4 | 5 | 6 | 7 => timestamp(cr3, b, false),
-                _ => EINVAL,
-            },
-            230 if b == 0 => sleep(cr3, c),
-            257 => self.open(a, b, c),
-            258 => self.make_dir(a, b),
-            262 => self.stat(a, b, c, d),
-            263 if c == 0 => self.unlink(a, b),
-            263 if c == 0x200 => self.remove_dir(a, b),
-            264 => self.rename(a, b, c, d),
-            267 => ENOENT,
-            269 | 439 => self.access(a, b),
-            273 => ENOSYS, // no robust futex lists
-            288 => self.socket_accept(a, b, c, d),
-            302 if a == 0 && c == 0 => getrlimit(cr3, b, d),
-            318 => getrandom(cr3, a, b, c),
-            334 => ENOSYS, // restartable sequences
+            abi::HANDLE_FLAGS => self.handle_flags(a, b, c),
+            abi::POLL => self.poll(a, b, c as i32),
+            abi::MAP_MEMORY => self.map(a, b, c, d),
+            abi::UNMAP_MEMORY => self.unmap(a, b),
+            abi::PROTECT_MEMORY => self.protect(a, b, c),
+            abi::BREAK => self.brk(a),
+            abi::SET_TLS => set_tls(unsafe { (*thread).context }, a),
+            abi::GET_TLS => out(
+                cr3,
+                a,
+                &unsafe { (*(*thread).context).fs_base }.to_ne_bytes(),
+                0,
+            ),
+            abi::RANDOM => getrandom(cr3, a, b),
+            abi::SLEEP => sleep(a),
+            abi::OPEN_SOCKET => self.socket_open(a, b),
+            abi::CONNECT_SOCKET | abi::BIND_SOCKET => {
+                self.socket_address(frame.rax == abi::CONNECT_SOCKET, a, b)
+            }
+            abi::LISTEN_SOCKET => self
+                .socket(a)
+                .map_or_else(|error| error, |socket| socket.listen()),
+            abi::ACCEPT_SOCKET => self.socket_accept(a, b, c),
+            abi::SEND_SOCKET => self.socket_write(a, b, c, d, e),
+            abi::RECEIVE_SOCKET => self.socket_read(a, b, c, d, e),
+            abi::SOCKET_ADDRESS => self.socket_name(c != 0, a, b),
+            abi::SOCKET_OPTION => self.socket_option(a, b, c != 0, d),
+            abi::CLOSE_SOCKET_WRITE => self
+                .socket(a)
+                .map_or_else(|error| error, |socket| socket.shutdown(1)),
+            abi::DISPLAY_ACQUIRE if !self.identity.seat => EPERM,
+            abi::DISPLAY_ACQUIRE
+            | abi::DISPLAY_PRESENT
+            | abi::DISPLAY_KEY
+            | abi::DISPLAY_RELEASE
+            | abi::DISPLAY_POINTER => super::graphics::call(tid, cr3, frame.rax, a),
             _ => ENOSYS,
         }
     }
 
     fn unlink(&self, dir: u64, address: u64) -> i64 {
         match self.path(dir, address) {
-            Ok(path) => fs_result(ramfs::unlink(path.path())),
+            Ok(path) if self.can_access(path.path(), true) => fs_result(ramfs::unlink(path.path())),
+            Ok(_) => EACCES,
             Err(error) => error,
         }
     }
@@ -1009,12 +949,15 @@ impl Process {
             Err(error) => return error,
         };
         match self.path(new_dir, new) {
-            Ok(path) => fs_result(ramfs::rename(old.path(), path.path())),
+            Ok(path) if self.can_access(old.path(), true) && self.can_access(path.path(), true) => {
+                fs_result(ramfs::rename(old.path(), path.path()))
+            }
+            Ok(_) => EACCES,
             Err(error) => error,
         }
     }
 
-    fn getdents(&mut self, fd: u64, address: u64, length: u64) -> i64 {
+    fn read_directory(&mut self, fd: u64, address: u64) -> i64 {
         let cr3 = self.space.0;
         let slot = match self.regular_fd(fd) {
             Ok(slot) => slot,
@@ -1024,50 +967,43 @@ impl Process {
         if !directory.stat().0 {
             return ENOTDIR;
         }
-        let mut written = 0;
-        while let Some(entry) = directory.directory_entry(slot.position as usize) {
-            let count = (20 + entry.length).next_multiple_of(8);
-            if written + count as u64 > length {
-                return if written == 0 { EINVAL } else { written as i64 };
-            }
-            let Some(out) = address.checked_add(written) else {
-                return EFAULT;
-            };
-            let mut record = [0; 88];
-            record[..8].copy_from_slice(&entry.inode.to_ne_bytes());
-            record[8..16].copy_from_slice(&(slot.position + 1).to_ne_bytes());
-            record[16..18].copy_from_slice(&(count as u16).to_ne_bytes());
-            record[18] = if entry.directory { 4 } else { 8 };
-            record[19..19 + entry.length].copy_from_slice(&entry.name[..entry.length]);
-            if !memory::copy_out(cr3, out, &record[..count]) {
-                return if written == 0 { EFAULT } else { written as i64 };
-            }
-            written += count as u64;
-            slot.position += 1;
+        let Some(entry) = directory.directory_entry(slot.position as usize) else {
+            return 0;
+        };
+        let mut record = [0; size_of::<abi::DirectoryEntry>()];
+        record[..8].copy_from_slice(&entry.inode.to_ne_bytes());
+        record[8..16].copy_from_slice(&(slot.position + 1).to_ne_bytes());
+        let kind = if entry.directory {
+            abi::FILE_DIRECTORY
+        } else {
+            abi::FILE_REGULAR
+        };
+        record[16..20].copy_from_slice(&kind.to_ne_bytes());
+        record[20..24].copy_from_slice(&(entry.length as u32).to_ne_bytes());
+        record[24..].copy_from_slice(&entry.name);
+        if !memory::copy_out(cr3, address, &record) {
+            return EFAULT;
         }
-        written as i64
+        slot.position += 1;
+        1
     }
 
     fn make_dir(&self, dir: u64, address: u64) -> i64 {
         match self.path(dir, address) {
-            Ok(path) => fs_result(ramfs::create(path.path(), true)),
+            Ok(path) if self.can_access(path.path(), true) => {
+                fs_result(ramfs::create(path.path(), true))
+            }
+            Ok(_) => EACCES,
             Err(error) => error,
         }
     }
 
     fn remove_dir(&self, dir: u64, address: u64) -> i64 {
         match self.path(dir, address) {
-            Ok(path) => fs_result(ramfs::remove(path.path(), true)),
-            Err(error) => error,
-        }
-    }
-
-    fn access(&self, dir: u64, address: u64) -> i64 {
-        match self.path(dir, address) {
-            Ok(path) => match ramfs::stat(path.path()) {
-                Ok(_) => 0,
-                Err(error) => fs_error(error),
-            },
+            Ok(path) if self.can_access(path.path(), true) => {
+                fs_result(ramfs::remove(path.path(), true))
+            }
+            Ok(_) => EACCES,
             Err(error) => error,
         }
     }
@@ -1111,38 +1047,45 @@ impl Process {
         ready
     }
 
-    fn fcntl(&mut self, fd: u64, operation: u64, argument: u64) -> i64 {
+    fn handle_flags(&mut self, fd: u64, set: u64, flags: u64) -> i64 {
         if self.standard_open(fd) {
-            return match operation {
-                1 | 2 => 0,
-                3 => i64::from(fd != 0),
-                _ => ENOSYS,
+            return if set == 0 {
+                (if fd == 0 {
+                    abi::OPEN_READ
+                } else {
+                    abi::OPEN_WRITE
+                }) as i64
+            } else {
+                0
             };
         }
         match self.descriptor(fd) {
-            Ok(file) if file.socket.is_some() => {
-                let socket = file.socket.as_mut().unwrap();
-                match operation {
-                    1 | 2 => 0,
-                    3 => {
-                        if socket.nonblocking {
-                            0x802
+            Ok(file) if set == 0 => {
+                if let Some(socket) = file.socket {
+                    (abi::OPEN_READ
+                        | abi::OPEN_WRITE
+                        | if socket.nonblocking {
+                            abi::OPEN_NONBLOCK
                         } else {
-                            2
-                        }
-                    }
-                    4 => {
-                        socket.nonblocking = argument & 0x800 != 0;
-                        0
-                    }
-                    _ => ENOSYS,
+                            0
+                        }) as i64
+                } else {
+                    (file.flags
+                        & (abi::OPEN_READ
+                            | abi::OPEN_WRITE
+                            | abi::OPEN_APPEND
+                            | abi::OPEN_NONBLOCK)) as i64
                 }
             }
-            Ok(file) => match operation {
-                1 | 2 => 0,
-                3 => file.flags as i64 & 0xc03,
-                _ => ENOSYS,
-            },
+            Ok(file) => {
+                if let Some(socket) = &mut file.socket {
+                    socket.nonblocking = flags & abi::OPEN_NONBLOCK != 0;
+                } else {
+                    file.flags = (file.flags & !(abi::OPEN_APPEND | abi::OPEN_NONBLOCK))
+                        | flags & (abi::OPEN_APPEND | abi::OPEN_NONBLOCK);
+                }
+                0
+            }
             Err(error) => error,
         }
     }
@@ -1191,7 +1134,7 @@ fn fs_result(result: i64) -> i64 {
     if result < 0 { fs_error(result) } else { result }
 }
 
-fn fs_error(error: i64) -> i64 {
+pub(super) fn fs_error(error: i64) -> i64 {
     match error {
         -2 => ENOENT,
         -3 => EEXIST,
@@ -1211,110 +1154,45 @@ fn out(cr3: u64, address: u64, bytes: &[u8], result: i64) -> i64 {
     }
 }
 
-fn stat_to_user(cr3: u64, address: u64, mode: u32, size: usize, inode: u64) -> i64 {
-    // x86-64 struct stat: dev, ino, nlink, mode, uid, gid, padding,
-    // rdev, size, block size, block count, timestamps and reserved words.
-    let mut bytes = [0; 144];
-    for (offset, value) in [
-        (0, 1),
-        (8, inode),
-        (16, 1),
-        (48, size as u64),
-        (56, PAGE),
-        (64, size.div_ceil(512) as u64),
-    ] {
-        bytes[offset..offset + 8].copy_from_slice(&value.to_ne_bytes());
-    }
-    for (offset, value) in [(24, mode), (28, 1000), (32, 1000)] {
-        bytes[offset..offset + 4].copy_from_slice(&value.to_ne_bytes());
-    }
+fn file_info(cr3: u64, address: u64, inode: u64, size: usize, kind: u32, owner: u32) -> i64 {
+    let mut bytes = [0; size_of::<abi::FileInfo>()];
+    bytes[..8].copy_from_slice(&inode.to_ne_bytes());
+    bytes[8..16].copy_from_slice(&(size as u64).to_ne_bytes());
+    bytes[16..20].copy_from_slice(&owner.to_ne_bytes());
+    bytes[20..24].copy_from_slice(&kind.to_ne_bytes());
     out(cr3, address, &bytes, 0)
 }
 
-fn arch_prctl(cr3: u64, context: *mut Context, operation: u64, address: u64) -> i64 {
-    match operation {
-        0x1002 if address < 0x8000_0000_0000 => {
-            unsafe { (*context).fs_base = address };
-            arch::set_fs_base(address);
-            0
-        }
-        0x1002 => EPERM,
-        0x1003 => out(
-            cr3,
-            address,
-            &unsafe { (*context).fs_base }.to_ne_bytes(),
-            0,
-        ),
-        _ => EINVAL,
+fn set_tls(context: *mut Context, address: u64) -> i64 {
+    if address >= 0x8000_0000_0000 {
+        return EPERM;
     }
+    unsafe { (*context).fs_base = address };
+    arch::set_fs_base(address);
+    0
 }
 
 pub(super) fn ticks() -> u64 {
     unsafe { ptr::addr_of!(lapic_ticks_ms).read_volatile() }
 }
 
-fn timestamp(cr3: u64, address: u64, micros: bool) -> i64 {
-    if micros && address == 0 {
+fn sleep(milliseconds: u64) -> i64 {
+    if milliseconds == 0 {
+        arch::wait_for_interrupt();
         return 0;
     }
-    let ticks = ticks();
-    let mut buf = [0; 16];
-    buf[..8].copy_from_slice(&(ticks / 1000).to_ne_bytes());
-    let units = if micros { 1000 } else { 1_000_000 };
-    buf[8..].copy_from_slice(&((ticks % 1000) * units).to_ne_bytes());
-    out(cr3, address, &buf, 0)
-}
-
-fn sleep(cr3: u64, address: u64) -> i64 {
-    let mut buf = [0; 16];
-    if !memory::copy_in(cr3, address, &mut buf) {
-        return EFAULT;
-    }
-    let sec = i64::from_ne_bytes(buf[..8].try_into().unwrap());
-    let nsec = u64::from_ne_bytes(buf[8..].try_into().unwrap());
-    if !(0..=86_400).contains(&sec) || nsec >= 1_000_000_000 {
+    if milliseconds > 86_400_000 {
         return EINVAL;
     }
-    let end = ticks().saturating_add(sec as u64 * 1000 + nsec.div_ceil(1_000_000));
+    let end = ticks().saturating_add(milliseconds);
     while ticks() < end {
         arch::wait_for_interrupt();
     }
     0
 }
 
-fn getrlimit(cr3: u64, resource: u64, address: u64) -> i64 {
-    if address == 0 {
-        return 0;
-    }
-    let value = match resource {
-        3 => memory::STACK_SIZE,
-        7 => FDS as u64 + 3,
-        0..=15 => u64::MAX,
-        _ => return EINVAL,
-    };
-    let mut buf = [0; 16];
-    buf[..8].copy_from_slice(&value.to_ne_bytes());
-    buf[8..].copy_from_slice(&value.to_ne_bytes());
-    out(cr3, address, &buf, 0)
-}
-
-fn futex(cr3: u64, address: u64, operation: u64, value: u64) -> i64 {
-    let mut bytes = [0; 4];
-    if address % 4 != 0 || !memory::copy_in(cr3, address, &mut bytes) {
-        return EFAULT;
-    }
-    match operation & 0x7f {
-        1 | 10 => 0,
-        0 | 9 if u32::from_ne_bytes(bytes) != value as u32 => EAGAIN,
-        _ => ENOSYS,
-    }
-}
-
-fn getrandom(cr3: u64, address: u64, length: u64, flags: u64) -> i64 {
+fn getrandom(cr3: u64, address: u64, length: u64) -> i64 {
     let length = (length as usize).min(IO_MAX);
-    if flags & !3 != 0 {
-        return EINVAL;
-    }
     if !memory::valid(cr3, address, length, WRITE) {
         return EFAULT;
     }
@@ -1330,26 +1208,8 @@ fn getrandom(cr3: u64, address: u64, length: u64, flags: u64) -> i64 {
     filled as i64
 }
 
-fn uname(cr3: u64, address: u64) -> i64 {
-    let mut buf = [0; 65 * 6];
-    for (i, field) in [
-        b"Lumen".as_slice(),
-        b"lumen",
-        b"0.1.0",
-        b"static musl ABI",
-        b"x86_64",
-        b"local",
-    ]
-    .iter()
-    .enumerate()
-    {
-        buf[i * 65..i * 65 + field.len()].copy_from_slice(field);
-    }
-    out(cr3, address, &buf, 0)
-}
-
 #[unsafe(no_mangle)]
-unsafe extern "C" fn lumen_elf_syscall(frame: *mut Frame) {
+unsafe extern "C" fn lumen_process_syscall(frame: *mut Frame) {
     let frame = unsafe { &mut *frame };
     let thread = unsafe { current_thread };
     if thread.is_null() || unsafe { (*thread).process }.is_null() {

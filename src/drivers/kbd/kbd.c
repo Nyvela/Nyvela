@@ -122,14 +122,27 @@ static void kbd_handle_code(uint8_t code) {
   kbd_push(c);
 }
 
-void kbd_irq_handler(void) {
+static void ps2_read_pending(void) {
   for (int i = 0; i < 8; i++) {
-    if (!(inb(KBD_STATUS) & KBD_OUT_FULL)) break;
-
-    kbd_handle_code(inb(KBD_DATA));
+    uint8_t status = inb(KBD_STATUS);
+    if (!(status & KBD_OUT_FULL)) break;
+    uint8_t byte = inb(KBD_DATA);
+    if (status & 0x20) {
+      lumen_graphics_mouse(byte);
+    } else {
+      kbd_handle_code(byte);
+    }
   }
+}
 
+void kbd_irq_handler(void) {
+  ps2_read_pending();
   kpic_eoi(1);
+}
+
+void mouse_irq_handler(void) {
+  ps2_read_pending();
+  kpic_eoi(12);
 }
 
 void kbd_init(void) {

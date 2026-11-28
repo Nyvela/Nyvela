@@ -1,6 +1,7 @@
 use core::ffi::c_char;
 
-use super::{arch, memory};
+use super::{accounts, arch, memory};
+use crate::abi;
 use memory::{NX, PAGE, PRESENT, STACK_SIZE, STACK_TOP, Space, USER, WRITE};
 
 const INVALID: i64 = -1;
@@ -52,6 +53,7 @@ pub unsafe fn load(
     program_name: &[u8],
     arguments: &[u8],
     file_size: u64,
+    account: abi::Account,
 ) -> Result<Executable, i64> {
     if file_size > MAX_IMAGE {
         return Err(NO_SPACE);
@@ -180,6 +182,7 @@ pub unsafe fn load(
         entry,
         mapped_headers,
         ph_count,
+        account,
     )?;
     Ok(Executable {
         space,
@@ -231,6 +234,7 @@ fn initial_stack(
     entry: u64,
     phdr: u64,
     ph_count: u64,
+    account: abi::Account,
 ) -> Result<u64, i64> {
     let mut stack = STACK_TOP;
     let mut argv = [0; 32];
@@ -253,14 +257,55 @@ fn initial_stack(
         word.copy_from_slice(&entropy.to_ne_bytes());
     }
     let random = push(cr3, &mut stack, &seed)?;
+    let mut home = [0; 38];
+    home[..5].copy_from_slice(b"HOME=");
+    let mut path = [0; 32];
+    let home_len = accounts::home(account, &mut path);
+    home[5..5 + home_len].copy_from_slice(&path[..home_len]);
+    let mut user = [0; 29];
+    user[..5].copy_from_slice(b"USER=");
+    user[5..].copy_from_slice(&account.name);
+    let length = user
+        .iter()
+        .position(|&byte| byte == 0)
+        .unwrap_or(user.len() - 1);
     let env = [
-        push(cr3, &mut stack, b"HOME=/\0")?,
+        push(cr3, &mut stack, &home[..6 + home_len])?,
+        push(cr3, &mut stack, &user[..=length])?,
         push(cr3, &mut stack, b"PATH=/bin\0")?,
         push(cr3, &mut stack, b"TERM=dumb\0")?,
     ];
     let aux = [
-        3, phdr, 4, PH_SIZE, 5, ph_count, 6, PAGE, 7, 0, 9, entry, 11, 1000, 12, 1000, 13, 1000,
-        14, 1000, 17, 100, 23, 0, 25, random, 31, argv[0], 0, 0,
+        3,
+        phdr,
+        4,
+        PH_SIZE,
+        5,
+        ph_count,
+        6,
+        PAGE,
+        7,
+        0,
+        9,
+        entry,
+        11,
+        u64::from(account.uid),
+        12,
+        u64::from(account.uid),
+        13,
+        u64::from(account.uid),
+        14,
+        u64::from(account.uid),
+        17,
+        100,
+        23,
+        0,
+        25,
+        random,
+        31,
+        argv[0],
+        0,
+        0,
     ];
     let stack_words = 1 + argc + 2 + env.len() + aux.len();
     stack = (stack - 8 * stack_words as u64) & !15;
