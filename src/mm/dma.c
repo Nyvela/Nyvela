@@ -1,6 +1,6 @@
-#include "../../include/nyvela/mm/dma.h"
-#include "../../include/nyvela/mm/pmm.h"
-#include "../../include/nyvela/lib/utils.h"
+#include "../../include/lumen/mm/dma.h"
+#include "../../include/lumen/mm/pmm.h"
+#include "../../include/lumen/lib/utils.h"
 
 uint8_t DMA_BITMAP[DMA_BITMAP_SIZE];
 uint64_t DMA_PAGES = 0;

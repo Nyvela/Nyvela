@@ -1,8 +1,8 @@
-# Nyvela
+# Lumen
 
 A simple 64-bit operating system written in x86-64 assembly, C, and Rust.
 
-Nyvela boots off a raw disk image through a three-stage bootloader, walks the CPU
+Lumen boots off a raw disk image through a three-stage bootloader, walks the CPU
 from real mode to long mode, sets up paging, and lands in a freestanding kernel
 that brings up memory management, interrupts, a scheduler, a filesystem, and
 userspace.
@@ -32,12 +32,12 @@ target with `rustup target add x86_64-unknown-none`. Install `dosfstools` to
 create the default FAT32 disk on the first boot.
 
 Clone the userspace dependencies next to the kernel checkout. Point
-`nyvela.conf` at their locations if you use a different directory layout.
+`lumen.conf` at their locations if you use a different directory layout.
 
 ```sh
-git clone https://github.com/Nyvela/Nyvd.git
-git clone https://github.com/Nyvela/Nyvsh.git
-git clone https://github.com/Nyvela/Npcid.git
+git clone https://github.com/Lumen/Nyvd.git
+git clone https://github.com/Lumen/Nyvsh.git
+git clone https://github.com/Lumen/Npcid.git
 git clone https://github.com/amogus-gggy/nvmed-rs.git
 git clone https://github.com/amogus-gggy/Nyvfat.git
 ```
@@ -45,7 +45,7 @@ git clone https://github.com/amogus-gggy/Nyvfat.git
 Example config:
 
 ```make
-# nyvela.conf
+# lumen.conf
 INIT_DIR = ../Nyvd
 INIT_BIN_NAME = nyvd
 INIT_BUILD_COMMAND = USER_CFLAGS="-I$(CURDIR)/include $(X86_CFLAGS)" $(MAKE) -B -C $(INIT_DIR)
@@ -71,12 +71,12 @@ make run    # boot it
 make debug  # boot paused, GDB stub on :1234
 ```
 
-You should land at a `Nyvela >` prompt. Try `help`, `ls`, `cat readme.txt`, and
+You should land at a `Lumen >` prompt. Try `help`, `ls`, `cat readme.txt`, and
 `run hello`.
 
 `make run` starts four virtual CPUs and attaches `build/fat32.img` through
 NVMe. The terminal shows the CPU count and `NVMED: ready` once the driver starts.
-At the Nyvela prompt in the QEMU window, type `run fat`. Inside `fat`, use
+At the Lumen prompt in the QEMU window, type `run fat`. Inside `fat`, use
 `ls`, `cat <path>`, `mkdir <path>`, `write <path> <text>`, and `exit`.
 Changes persist in `build/fat32.img`.
 
@@ -98,7 +98,7 @@ BIOS -> boot.s (0x7C00) -> stage_1.s (0x8000) -> stage_2.s (0x8800) -> kmain (0x
 ## Layout
 
 ```
-include/nyvela/     headers: arch, mm, thread, syscall, fs, user SDK
+include/lumen/     headers: arch, mm, thread, syscall, fs, user SDK
 src/arch/x86_64/    boot loaders, GDT, IDT, context switch, PIC, APIC, faults
 src/mm/             pmm.c, vmm.c, heap.c
 src/thread/         threads and context switching
@@ -118,7 +118,7 @@ The `docs/` directory has the detail:
 | doc | what's in it |
 |-----|--------------|
 | [Boot chain](docs/boot.md) | the three loaders, image layout, memory management, interrupts |
-| [Build system](docs/build.md) | `nyvela.conf`, toolchains, linker scripts, flat binaries, adding a user program |
+| [Build system](docs/build.md) | `lumen.conf`, toolchains, linker scripts, flat binaries, adding a user program |
 | [Syscalls](docs/syscall.md) | the `int 0x80` ABI and full table, validation rules |
 | [Userspace](docs/userspace.md) | threads, address spaces, memory layout, init bootstrap, IPC |
 | [Debugging](docs/debugging.md) | GDB recipes, capturing the console, troubleshooting table |

@@ -1,11 +1,11 @@
-#include "../../include/nyvela/ktests/ktests.h"
-#include "../../include/nyvela/mm/pmm.h"
-#include "../../include/nyvela/mm/vmm.h"
-#include "../../include/nyvela/mm/heap.h"
-#include "../../include/nyvela/fs/vfs.h"
-#include "../../include/nyvela/drivers/video/console/console.h"
-#include "../../include/nyvela/lib/utils.h"
-#include "../../include/nyvela/arch/x86_64/asm/cpu.h"
+#include "../../include/lumen/ktests/ktests.h"
+#include "../../include/lumen/mm/pmm.h"
+#include "../../include/lumen/mm/vmm.h"
+#include "../../include/lumen/mm/heap.h"
+#include "../../include/lumen/fs/vfs.h"
+#include "../../include/lumen/drivers/video/console/console.h"
+#include "../../include/lumen/lib/utils.h"
+#include "../../include/lumen/arch/x86_64/asm/cpu.h"
 
 void klog_ram_data() {
   char buf[21];

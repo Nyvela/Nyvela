@@ -1,8 +1,8 @@
-#include "../../../../include/nyvela/arch/x86_64/apic/apic.h"
-#include "../../../../include/nyvela/arch/x86_64/asm/msr.h"
-#include "../../../../include/nyvela/mm/vmm.h"
-#include "../../../../include/nyvela/arch/x86_64/asm/out.h"
-#include "../../../../include/nyvela/arch/x86_64/pit/pit.h"
+#include "../../../../include/lumen/arch/x86_64/apic/apic.h"
+#include "../../../../include/lumen/arch/x86_64/asm/msr.h"
+#include "../../../../include/lumen/mm/vmm.h"
+#include "../../../../include/lumen/arch/x86_64/asm/out.h"
+#include "../../../../include/lumen/arch/x86_64/pit/pit.h"
 
 static uintptr_t lapic_base;
 

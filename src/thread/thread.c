@@ -1,10 +1,10 @@
-#include "../../include/nyvela/thread/thread.h"
-#include "../../include/nyvela/arch/x86_64/gdt.h"
-#include "../../include/nyvela/arch/x86_64/asm/cpu.h"
-#include "../../include/nyvela/mm/heap.h"
-#include "../../include/nyvela/mm/pmm.h"
-#include "../../include/nyvela/lib/utils.h"
-#include "../../include/nyvela/mm/vmm.h"
+#include "../../include/lumen/thread/thread.h"
+#include "../../include/lumen/arch/x86_64/gdt.h"
+#include "../../include/lumen/arch/x86_64/asm/cpu.h"
+#include "../../include/lumen/mm/heap.h"
+#include "../../include/lumen/mm/pmm.h"
+#include "../../include/lumen/lib/utils.h"
+#include "../../include/lumen/mm/vmm.h"
 
 thread_t **threads;
 thread_t *current_thread;

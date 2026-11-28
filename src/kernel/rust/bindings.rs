@@ -1,15 +1,15 @@
 // C declarations used by the Rust kernel. Keep signatures in sync with the
-// Nyvela C headers and bridge functions.
+// Lumen C headers and bridge functions.
 use core::ffi::c_char;
 
 unsafe extern "C" {
-    // include/nyvela/drivers/video/console/console.h
+    // include/lumen/drivers/video/console/console.h
     pub(super) fn kwrite(buf: *const c_char, len: u64, color: u8);
 
     // src/kernel/rust_bridge.c
-    pub(super) fn nyvela_rust_panic() -> !;
+    pub(super) fn lumen_rust_panic() -> !;
 
-    // include/nyvela/mm/{pmm,vmm}.h
+    // include/lumen/mm/{pmm,vmm}.h
     pub(super) fn kpalloc() -> *mut u8;
     pub(super) fn kpalloc_contiguous(pages: u64) -> *mut u8;
     pub(super) fn kpfree(page: *mut u8);

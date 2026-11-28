@@ -1,6 +1,6 @@
-#include "../../include/nyvela/exec/exec.h"
-#include "../../include/nyvela/fs/vfs.h"
-#include "../../include/nyvela/lib/utils.h"
+#include "../../include/lumen/exec/exec.h"
+#include "../../include/lumen/fs/vfs.h"
+#include "../../include/lumen/lib/utils.h"
 
 int64_t exec_load(const char *path, uint64_t base, uint64_t max) {
   int64_t sz = vfs_size(path);

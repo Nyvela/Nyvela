@@ -1,8 +1,8 @@
 #ifndef NYVSCHEDULER_H
 #define NYVSCHEDULER_H
 
-#include "../../../include/nyvela/arch/x86_64/context.h"
-#include "../../../include/nyvela/thread/thread.h"
+#include "../../../include/lumen/arch/x86_64/context.h"
+#include "../../../include/lumen/thread/thread.h"
 #include <stdint.h>
 
 #define SCHED_HZ 100

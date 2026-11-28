@@ -1,7 +1,7 @@
-#include "../../../../include/nyvela/arch/x86_64/fault.h"
-#include "../../../../include/nyvela/drivers/video/console/console.h"
-#include "../../../../include/nyvela/arch/x86_64/asm/cpu.h"
-#include "../../../../include/nyvela/scheduler/scheduler.h"
+#include "../../../../include/lumen/arch/x86_64/fault.h"
+#include "../../../../include/lumen/drivers/video/console/console.h"
+#include "../../../../include/lumen/arch/x86_64/asm/cpu.h"
+#include "../../../../include/lumen/scheduler/scheduler.h"
 
 static void put_hex64(uint64_t v) {
   char buf[19];

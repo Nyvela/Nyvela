@@ -1,6 +1,6 @@
-#include "../../include/nyvela/fs/vfs.h"
-#include "../../include/nyvela/fs/ramfs.h"
-#include "../../include/nyvela/lib/utils.h"
+#include "../../include/lumen/fs/vfs.h"
+#include "../../include/lumen/fs/ramfs.h"
+#include "../../include/lumen/lib/utils.h"
 
 bool vfs_init(void) {
   return ramfs_init();

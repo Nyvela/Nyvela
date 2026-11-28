@@ -1,4 +1,4 @@
-#include "../../../../include/nyvela/arch/x86_64/asm/cpuid.h"
+#include "../../../../include/lumen/arch/x86_64/asm/cpuid.h"
 
 cpuid_result_t cpuid(uint32_t leaf, uint32_t subleaf) {
   cpuid_result_t res;

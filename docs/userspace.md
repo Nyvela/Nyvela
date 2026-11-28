@@ -21,7 +21,7 @@ The ring0 idle thread just runs `hlt` in a loop.
 
 ## Memory layout
 
-Constants live in `include/nyvela/mm/vmm.h` and are mirrored in `syslib.h`:
+Constants live in `include/lumen/mm/vmm.h` and are mirrored in `syslib.h`:
 
 | symbol | address | what |
 |--------|---------|------|
@@ -47,7 +47,7 @@ The kernel does the first steps itself in `kuserspace_init()`:
 
 It never comes back; from that point on everything is userspace.
 
-The init program (the external project configured in `nyvela.conf`, see
+The init program (the external project configured in `lumen.conf`, see
 [build system](build.md)) then does the same job for `/bin/sh`:
 
 1. `alloc_page` per page of the shell image.
@@ -63,7 +63,7 @@ dies, reaps it, and returns its exit code.
 ## Shell
 
 Ring3, a `no_std` Rust program built from its own project (`SHELL_DIR` in
-`nyvela.conf`, see [build system](build.md)), prompt `Nyvela > `, with line
+`lumen.conf`, see [build system](build.md)), prompt `Lumen > `, with line
 editing (echo + backspace).
 
 | command | effect |

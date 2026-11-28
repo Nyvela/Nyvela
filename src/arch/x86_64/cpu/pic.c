@@ -1,5 +1,5 @@
-#include "../../../../include/nyvela/arch/x86_64/pic/pic.h"
-#include "../../../../include/nyvela/arch/x86_64/asm/io.h"
+#include "../../../../include/lumen/arch/x86_64/pic/pic.h"
+#include "../../../../include/lumen/arch/x86_64/asm/io.h"
 
 void kpic_init() {
   outb(0x20, 0x11); // initialize ICW1 master

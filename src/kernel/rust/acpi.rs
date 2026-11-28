@@ -1,7 +1,7 @@
 use core::{ptr, slice};
 
 const SDT_HEADER: usize = 36;
-// Nyvela's boot page tables identity-map the first GiB.
+// Lumen's boot page tables identity-map the first GiB.
 const IDENTITY_END: usize = 1 << 30;
 const MAX_TABLE_BYTES: usize = 1 << 20;
 

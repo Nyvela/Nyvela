@@ -12,8 +12,8 @@ pub struct Image {
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn nyvela_fat_image() -> Image {
-    let bytes = include_bytes!(env!("NYVELA_FAT_BIN"));
+pub extern "C" fn lumen_fat_image() -> Image {
+    let bytes = include_bytes!(env!("LUMEN_FAT_BIN"));
     Image {
         bytes: bytes.as_ptr(),
         length: bytes.len(),
@@ -27,7 +27,7 @@ pub extern "C" fn nyvela_fat_image() -> Image {
 ///
 /// The address space must be owned by the caller and inactive.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn nyvela_map_exec_stack(cr3: u64, initial_page: u64) -> bool {
+pub unsafe extern "C" fn lumen_map_exec_stack(cr3: u64, initial_page: u64) -> bool {
     for index in 1..STACK_PAGES {
         let virtual_page = initial_page - index * PAGE_SIZE;
         let pte = unsafe { bindings::kget_pte_addr_at(cr3, virtual_page) };

@@ -75,7 +75,7 @@ scheduled.
 
 ## User SDK
 
-`include/nyvela/user/syslib.h` has the syscall numbers, inline wrappers
+`include/lumen/user/syslib.h` has the syscall numbers, inline wrappers
 (`sys_exit`, `sys_write`, `sys_read`, `sys_yield`, `sys_fs_*`, `sys_exec`), a
 raw `sys_call(nr, a1..a4)`, and string helpers (`ustrlen`, `ustrcmp`,
 `ustrncmp`, `umemcpy`, `umemset`, `uitoa`).

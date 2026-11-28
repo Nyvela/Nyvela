@@ -1,4 +1,4 @@
-#include "../../../../include/nyvela/arch/x86_64/asm/msr.h"
+#include "../../../../include/lumen/arch/x86_64/asm/msr.h"
 
 void kset_msr(uint32_t msr, msr_t data) {
   __asm__ volatile (

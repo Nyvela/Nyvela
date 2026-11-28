@@ -1,6 +1,6 @@
-#include "../../include/nyvela/mm/heap.h"
-#include "../../include/nyvela/mm/pmm.h"
-#include "../../include/nyvela/lib/utils.h"
+#include "../../include/lumen/mm/heap.h"
+#include "../../include/lumen/mm/pmm.h"
+#include "../../include/lumen/lib/utils.h"
 
 #include <stddef.h>
 

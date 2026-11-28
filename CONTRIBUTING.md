@@ -10,7 +10,7 @@ You need `gcc` with C23 support, `nasm`, `ld`, `objcopy`, `make`,
 `qemu-system-x86_64`, and Rust 1.85 or later. Install the freestanding Rust
 target with `rustup target add x86_64-unknown-none`.
 
-`make` will not run without a `nyvela.conf`. Nyvela is kernel-only, so the
+`make` will not run without a `lumen.conf`. Lumen is kernel-only, so the
 config points at the two userspace programs it boots into, both outside the
 tree:
 
@@ -32,7 +32,7 @@ NPCID_DIR = ../npcid
 NPCID_BIN_NAME = npcid
 ```
 
-Then `make && make run`. You should reach a `Nyvela >` prompt.
+Then `make && make run`. You should reach a `Lumen >` prompt.
 
 ## Ground rules
 
@@ -80,7 +80,7 @@ nothing to assert on.
 
 ## Things that will bite you
 
-**A user flat binary must start with `_start` at offset 0.** Nyvela loads an
+**A user flat binary must start with `_start` at offset 0.** Lumen loads an
 image at its link base and enters at that same address. That only holds if the
 custom linker script is actually applied with `-T`. Without it, `ld` page-aligns
 the sections and emits GNU notes first, so offset 0 is a note and the program

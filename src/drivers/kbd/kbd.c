@@ -1,6 +1,6 @@
-#include "../../../include/nyvela/drivers/kbd/kbd.h"
-#include "../../../include/nyvela/arch/x86_64/asm/io.h"
-#include "../../../include/nyvela/arch/x86_64/pic/pic.h"
+#include "../../../include/lumen/drivers/kbd/kbd.h"
+#include "../../../include/lumen/arch/x86_64/asm/io.h"
+#include "../../../include/lumen/arch/x86_64/pic/pic.h"
 
 #define KBD_DATA 0x60
 #define KBD_STATUS 0x64

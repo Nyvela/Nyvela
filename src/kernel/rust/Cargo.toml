@@ -1,5 +1,5 @@
 [package]
-name = "nyvela_kernel"
+name = "lumen_kernel"
 version = "0.1.0"
 edition = "2024"
 

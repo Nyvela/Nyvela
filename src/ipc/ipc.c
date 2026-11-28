@@ -1,9 +1,9 @@
-#include "../../include/nyvela/ipc/ipc.h"
-#include "../../include/nyvela/thread/thread.h"
-#include "../../include/nyvela/mm/heap.h"
-#include "../../include/nyvela/mm/pmm.h"
-#include "../../include/nyvela/syscall/syscall.h"
-#include "../../include/nyvela/lib/utils.h"
+#include "../../include/lumen/ipc/ipc.h"
+#include "../../include/lumen/thread/thread.h"
+#include "../../include/lumen/mm/heap.h"
+#include "../../include/lumen/mm/pmm.h"
+#include "../../include/lumen/syscall/syscall.h"
+#include "../../include/lumen/lib/utils.h"
 
 bool ipc_grow_queue(ipc_queue_t *queue) {
   uint64_t new_cap = queue->capacity * 2;

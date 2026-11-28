@@ -1,23 +1,23 @@
-#include "../../include/nyvela/syscall/syscall.h"
-#include "../../include/nyvela/fs/vfs.h"
-#include "../../include/nyvela/exec/exec.h"
-#include "../../include/nyvela/drivers/video/console/console.h"
-#include "../../include/nyvela/drivers/kbd/kbd.h"
-#include "../../include/nyvela/thread/thread.h"
-#include "../../include/nyvela/scheduler/scheduler.h"
-#include "../../include/nyvela/arch/x86_64/gdt.h"
-#include "../../include/nyvela/arch/x86_64/context.h"
-#include "../../include/nyvela/mm/heap.h"
-#include "../../include/nyvela/mm/vmm.h"
-#include "../../include/nyvela/lib/utils.h"
-#include "../../include/nyvela/ipc/ipc.h"
-#include "../../include/nyvela/arch/x86_64/asm/cpu.h"
-#include "../../include/nyvela/arch/x86_64/asm/io.h"
-#include "../../include/nyvela/mm/pmm.h"
-#include "../../include/nyvela/as/as.h"
-#include "../../include/nyvela/mm/dma.h"
-#include "../../include/nyvela/arch/x86_64/apic/apic.h"
-#include "../../include/nyvela/kernel/rust.h"
+#include "../../include/lumen/syscall/syscall.h"
+#include "../../include/lumen/fs/vfs.h"
+#include "../../include/lumen/exec/exec.h"
+#include "../../include/lumen/drivers/video/console/console.h"
+#include "../../include/lumen/drivers/kbd/kbd.h"
+#include "../../include/lumen/thread/thread.h"
+#include "../../include/lumen/scheduler/scheduler.h"
+#include "../../include/lumen/arch/x86_64/gdt.h"
+#include "../../include/lumen/arch/x86_64/context.h"
+#include "../../include/lumen/mm/heap.h"
+#include "../../include/lumen/mm/vmm.h"
+#include "../../include/lumen/lib/utils.h"
+#include "../../include/lumen/ipc/ipc.h"
+#include "../../include/lumen/arch/x86_64/asm/cpu.h"
+#include "../../include/lumen/arch/x86_64/asm/io.h"
+#include "../../include/lumen/mm/pmm.h"
+#include "../../include/lumen/as/as.h"
+#include "../../include/lumen/mm/dma.h"
+#include "../../include/lumen/arch/x86_64/apic/apic.h"
+#include "../../include/lumen/kernel/rust.h"
 
 extern void switch_context(context_t *context);
 
@@ -345,7 +345,7 @@ static void sys_exec(syscall_frame_t *f) {
     return;
   }
 
-  if (!nyvela_map_exec_stack(cr3, PROG_STACK_PAGE)) {
+  if (!lumen_map_exec_stack(cr3, PROG_STACK_PAGE)) {
     kvmm_free_user_pml4(cr3);
     f->rax = (uint64_t)(int64_t)VFS_ERR_NOSPACE;
     sti();
@@ -918,7 +918,7 @@ void sys_pci_conf_read32(syscall_frame_t *f) {
   f->rax = inl(0xCFC);
 }
 
-// Nyvela currently runs a single NVMe service. Only alter the command word,
+// Lumen currently runs a single NVMe service. Only alter the command word,
 // leaving PCI status (whose bits may be write-one-to-clear) untouched.
 static void sys_nvme_claim(syscall_frame_t *f) {
   static uint64_t owner;

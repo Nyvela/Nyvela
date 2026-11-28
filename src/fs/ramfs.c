@@ -1,8 +1,8 @@
-#include "../../include/nyvela/fs/ramfs.h"
-#include "../../include/nyvela/fs/vfs.h"
-#include "../../include/nyvela/mm/heap.h"
-#include "../../include/nyvela/mm/pmm.h"
-#include "../../include/nyvela/lib/utils.h"
+#include "../../include/lumen/fs/ramfs.h"
+#include "../../include/lumen/fs/vfs.h"
+#include "../../include/lumen/mm/heap.h"
+#include "../../include/lumen/mm/pmm.h"
+#include "../../include/lumen/lib/utils.h"
 
 #define RAMFS_PAGES_PER_FILE (VFS_MAX_FILE_SIZE / 4096)
 

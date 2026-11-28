@@ -12,10 +12,10 @@
 
 Tested on Linux with GCC 13+ and QEMU 8+.
 
-## nyvela.conf
+## lumen.conf
 
 The userspace programs live in sibling repositories. `make` reads their paths
-and build settings from `nyvela.conf` in the repo root.
+and build settings from `lumen.conf` in the repo root.
 
 ```make
 INIT_DIR = ../Nyvd
@@ -53,9 +53,9 @@ the key that is actually missing.
 | `NPCID_BIN_NAME` | base name of its flat binary; published as `/bin/npcid` |
 | `FAT_DIR` | directory of the Nyvfat checkout, which produces `build/fat.bin` |
 
-Nyvela invokes recursive builds for nvmed, npcid, and Nyvfat.
+Lumen invokes recursive builds for nvmed, npcid, and Nyvfat.
 
-Nyvela embeds the userspace binaries and publishes them into ramfs at boot.
+Lumen embeds the userspace binaries and publishes them into ramfs at boot.
 The assembly blobs use `incbin` and Nyvfat uses Rust's `include_bytes!`.
 
 | blob | published as |
@@ -69,15 +69,15 @@ The assembly blobs use `incbin` and Nyvfat uses Rust's `include_bytes!`.
 Each userspace project provides its own flat binary.
 
 `INIT_BUILD_COMMAND` must forward `USER_CFLAGS`, if the init project includes
-Nyvela headers (`<nyvela/user/syslib.h>`) and only learns the include path from
+Lumen headers (`<lumen/user/syslib.h>`) and only learns the include path from
 this invocation. Building it by hand without that flag fails with
-`fatal error: nyvela/user/syslib.h: No such file or directory`.
+`fatal error: lumen/user/syslib.h: No such file or directory`.
 
 ### How staleness is tracked
 
 The init binary is a prerequisite of every kernel object, but on its own that is
 not enough: `make` only reruns `$(INIT_BUILD_COMMAND)` when a listed prerequisite
-is newer than the target. Depending on `nyvela.conf` alone means editing init
+is newer than the target. Depending on `lumen.conf` alone means editing init
 sources does nothing, `nyvd.bin` keeps its old timestamp, and `incbin` embeds
 the previous build. The symptom is a kernel that boots a feature you already
 wrote - a new spawn target, a new `/bin` entry - and silently keeps the old
@@ -89,7 +89,7 @@ So the rule also depends on the init project's own sources:
 INIT_INPUTS := $(shell find $(INIT_DIR)/src $(INIT_DIR)/include -type f 2>/dev/null) \
                $(INIT_DIR)/makefile $(INIT_DIR)/linker.ld
 
-$(INIT_BIN): makefile nyvela.conf $(INIT_INPUTS)
+$(INIT_BIN): makefile lumen.conf $(INIT_INPUTS)
 	$(INIT_BUILD_COMMAND)
 ```
 
@@ -182,7 +182,7 @@ QEMU_NVME_IMAGE ?= $(FAT_IMAGE)
 QEMU_CPUS ?= 4
 QEMU_DEVICES := \
 	-drive if=none,id=nvme0,file=$(QEMU_NVME_IMAGE),format=raw \
-	-device nvme,drive=nvme0,serial=nyvela0
+	-device nvme,drive=nvme0,serial=lumen0
 ```
 
 `if=none` attaches the image exclusively to the NVMe controller. Writes to the
@@ -219,7 +219,7 @@ embedded via `incbin`, and published into ramfs at boot.
 
 ### Offset 0 must be the entry point
 
-Nyvela loads a user image at its link base and enters at *that same address*, so
+Lumen loads a user image at its link base and enters at *that same address*, so
 the flat binary has to begin with `_start`. This only holds if the custom linker
 script is actually applied with `-T`. With `ld`'s default script the sections get
 page-aligned (`_start` lands at `0x40185b`), GNU note sections are emitted first,
@@ -296,7 +296,7 @@ project, not here.
 Install Rust 1.85 or later with the `x86_64-unknown-none` target
 (`rustup target add x86_64-unknown-none`). The normal `make` build invokes Cargo
 in `src/kernel/rust` (with its target directory under `build/kernel/cargo`) and
-copies the resulting staticlib to `build/kernel/libnyvela_rust.a` before linking
+copies the resulting staticlib to `build/kernel/liblumen_rust.a` before linking
 it into `kernel.elf`. The crate uses `core`, static addressing and aborting
 panics. The target uses a soft-float ABI and the build disables the red zone.
 A Rust panic reports a fatal error through the C console and halts the CPU.
@@ -318,9 +318,9 @@ Keep the handle within that boot phase.
   Put raw pointer, lifetime and execution-context checks at the boundary and
   expose safe functions only when their invariants can be enforced.
 - Export Rust functions with `extern "C"` and `#[unsafe(no_mangle)]` and add
-  matching declarations to `include/nyvela/kernel/rust.h`. Use fixed-width
+  matching declarations to `include/lumen/kernel/rust.h`. Use fixed-width
   integers, pointers, and `#[repr(C)]` structs where needed. Document any
   caller obligations in both languages.
 
-During boot, `Nyvela Rust kernel ready.` verifies the C entry into Rust and
+During boot, `Lumen Rust kernel ready.` verifies the C entry into Rust and
 the Rust call back into the C console.

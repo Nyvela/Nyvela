@@ -1,6 +1,6 @@
-#include "../../include/nyvela/as/as.h"
-#include "../../include/nyvela/mm/heap.h"
-#include "../../include/nyvela/mm/vmm.h"
+#include "../../include/lumen/as/as.h"
+#include "../../include/lumen/mm/heap.h"
+#include "../../include/lumen/mm/vmm.h"
 
 #include <stddef.h>
 

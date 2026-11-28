@@ -1,9 +1,9 @@
-#include "../../include/nyvela/mm/vmm.h"
-#include "../../include/nyvela/mm/pmm.h"
-#include "../../include/nyvela/mm/dma.h"
-#include "../../include/nyvela/drivers/video/console/console.h"
-#include "../../include/nyvela/arch/x86_64/asm/cpu.h"
-#include "../../include/nyvela/lib/utils.h"
+#include "../../include/lumen/mm/vmm.h"
+#include "../../include/lumen/mm/pmm.h"
+#include "../../include/lumen/mm/dma.h"
+#include "../../include/lumen/drivers/video/console/console.h"
+#include "../../include/lumen/arch/x86_64/asm/cpu.h"
+#include "../../include/lumen/lib/utils.h"
 
 uint64_t kernel_cr3 = 0;
 

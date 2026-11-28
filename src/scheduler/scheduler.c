@@ -1,8 +1,8 @@
-#include "../../include/nyvela/scheduler/scheduler.h"
-#include "../../include/nyvela/drivers/video/console/console.h"
-#include "../../include/nyvela/thread/thread.h"
-#include "../../include/nyvela/mm/heap.h"
-#include "../../include/nyvela/arch/x86_64/gdt.h"
+#include "../../include/lumen/scheduler/scheduler.h"
+#include "../../include/lumen/drivers/video/console/console.h"
+#include "../../include/lumen/thread/thread.h"
+#include "../../include/lumen/mm/heap.h"
+#include "../../include/lumen/arch/x86_64/gdt.h"
 
 thread_t* scheduler_next() {
   if (threads_length == 0)

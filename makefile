@@ -1,51 +1,51 @@
-include nyvela.conf
+include lumen.conf
 
 ifndef INIT_DIR
-$(error INIT_DIR is not configured. (see nyvela.conf))
+$(error INIT_DIR is not configured. (see lumen.conf))
 endif
 
 ifeq ($(wildcard $(INIT_DIR)/.),)
-$(error init directory $(INIT_DIR) does not exist. (see nyvela.conf))
+$(error init directory $(INIT_DIR) does not exist. (see lumen.conf))
 endif
 
 ifndef INIT_BIN_NAME
-$(error INIT_BIN_NAME is not configured. (see nyvela.conf))
+$(error INIT_BIN_NAME is not configured. (see lumen.conf))
 endif
 
 ifndef INIT_BUILD_COMMAND
-$(error INIT_BUILD_COMMAND is not configured. (see nyvela.conf))
+$(error INIT_BUILD_COMMAND is not configured. (see lumen.conf))
 endif
 
 ifndef SHELL_DIR
-$(error SHELL_DIR is not configured. (see nyvela.conf))
+$(error SHELL_DIR is not configured. (see lumen.conf))
 endif
 
 ifndef SHELL_BIN_NAME
-$(error SHELL_BIN_NAME is not configured. (see nyvela.conf))
+$(error SHELL_BIN_NAME is not configured. (see lumen.conf))
 endif
 
 ifndef SHELL_BUILD_COMMAND
-$(error SHELL_BUILD_COMMAND is not configured. (see nyvela.conf))
+$(error SHELL_BUILD_COMMAND is not configured. (see lumen.conf))
 endif
 
 ifndef NVMED_DIR
-$(error NVMED_DIR is not configured. (see nyvela.conf))
+$(error NVMED_DIR is not configured. (see lumen.conf))
 endif
 
 ifndef NVMED_BIN_NAME
-$(error NVMED_BIN_NAME is not configured. (see nyvela.conf))
+$(error NVMED_BIN_NAME is not configured. (see lumen.conf))
 endif
 
 ifndef NPCID_DIR
-$(error NPCID_DIR is not configured. (see nyvela.conf))
+$(error NPCID_DIR is not configured. (see lumen.conf))
 endif
 
 ifndef NPCID_BIN_NAME
-$(error NPCID_BIN_NAME is not configured. (see nyvela.conf))
+$(error NPCID_BIN_NAME is not configured. (see lumen.conf))
 endif
 
 ifndef FAT_DIR
-$(error FAT_DIR is not configured. (see nyvela.conf))
+$(error FAT_DIR is not configured. (see lumen.conf))
 endif
 
 INIT_BIN := $(INIT_DIR)/build/$(INIT_BIN_NAME).bin
@@ -137,7 +137,7 @@ ASM_OBJ := $(patsubst $(SRC_DIR)/%.s,$(BUILD)/%.o,$(KERNEL_ASM_SRC))
 
 KERNEL_OBJ := $(C_OBJ) $(ASM_OBJ)
 RUST_DIR := $(SRC_DIR)/kernel/rust
-RUST_LIB := $(BUILD)/kernel/libnyvela_rust.a
+RUST_LIB := $(BUILD)/kernel/liblumen_rust.a
 RUST_CARGO_TARGET := $(BUILD)/kernel/cargo
 RUST_SOURCES := $(shell find $(RUST_DIR) -type f -name '*.rs') \
                 $(RUST_DIR)/Cargo.toml $(RUST_DIR)/Cargo.lock
@@ -147,7 +147,7 @@ RUST_FLAGS := -C no-redzone=yes -C relocation-model=static -C code-model=small
 
 all: $(IMAGE)
 
-$(INIT_BIN): makefile nyvela.conf $(INIT_INPUTS)
+$(INIT_BIN): makefile lumen.conf $(INIT_INPUTS)
 	$(INIT_BUILD_COMMAND)
 
 $(NVMED_BIN): $(NVMED_INPUTS)
@@ -183,7 +183,7 @@ $(BUILD)/%.o: $(SRC_DIR)/%.s
 	@mkdir -p $(dir $@)
 	$(AS) $(ASFLAGS) $< -o $@
 
-$(USER_HELLO_ELF): $(SRC_DIR)/user/hello/hello.c include/nyvela/user/syslib.h $(SRC_DIR)/user/ld/prog.ld makefile
+$(USER_HELLO_ELF): $(SRC_DIR)/user/hello/hello.c include/lumen/user/syslib.h $(SRC_DIR)/user/ld/prog.ld makefile
 	@mkdir -p $(dir $@)
 	$(CC) $(USER_CFLAGS) -T $(SRC_DIR)/user/ld/prog.ld $(USER_LDFLAGS) $< -o $@
 
@@ -211,14 +211,14 @@ $(NPCID_BLOB_O): $(NPCID_BLOB_S) $(NPCID_BIN)
 	@mkdir -p $(dir $@)
 	$(AS) $(ASFLAGS) -DNPCID_BIN=\"$(abspath $(NPCID_BIN))\" $< -o $@
 
-$(BUILD)/kernel/kernel.o: include/nyvela/kernel/rust.h
+$(BUILD)/kernel/kernel.o: include/lumen/kernel/rust.h
 
 $(RUST_LIB): $(RUST_SOURCES) $(AP_BOOT) $(FAT_BIN) makefile
 	@mkdir -p $(dir $@)
 	CARGO_TARGET_DIR=$(abspath $(RUST_CARGO_TARGET)) RUSTFLAGS="$(RUST_FLAGS)" \
-	NYVELA_AP_BOOT="$(abspath $(AP_BOOT))" NYVELA_FAT_BIN="$(abspath $(FAT_BIN))" \
+	LUMEN_AP_BOOT="$(abspath $(AP_BOOT))" LUMEN_FAT_BIN="$(abspath $(FAT_BIN))" \
 	$(CARGO) build --release --target x86_64-unknown-none --manifest-path $(RUST_DIR)/Cargo.toml
-	cp $(RUST_CARGO_TARGET)/x86_64-unknown-none/release/libnyvela_kernel.a $@
+	cp $(RUST_CARGO_TARGET)/x86_64-unknown-none/release/liblumen_kernel.a $@
 
 $(KERNEL): $(KERNEL_OBJ) $(RUST_LIB) linker.ld makefile
 	@mkdir -p $(dir $@)
@@ -238,11 +238,11 @@ fat-image: $(FAT_IMAGE)
 
 $(FAT_IMAGE):
 	@mkdir -p $(dir $@)
-	mkfs.fat -C -F 32 -n NYVELA $@ 65536
+	mkfs.fat -C -F 32 -n LUMEN $@ 65536
 
 QEMU_DEVICES := \
 	-drive if=none,id=nvme0,file=$(QEMU_NVME_IMAGE),format=raw \
-	-device nvme,drive=nvme0,serial=nyvela0
+	-device nvme,drive=nvme0,serial=lumen0
 
 ifneq ($(QEMU_NVME_IMAGE),$(FAT_IMAGE))
 $(QEMU_NVME_IMAGE):

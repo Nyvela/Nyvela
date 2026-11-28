@@ -1,6 +1,6 @@
-#include "../../../../include/nyvela/drivers/video/console/console.h"
-#include "../../../../include/nyvela/drivers/video/vga/vga.h"
-#include "../../../../include/nyvela/arch/x86_64/asm/io.h"
+#include "../../../../include/lumen/drivers/video/console/console.h"
+#include "../../../../include/lumen/drivers/video/vga/vga.h"
+#include "../../../../include/lumen/arch/x86_64/asm/io.h"
 
 volatile uint8_t *ROW = (volatile uint8_t*)0xC801;
 volatile uint8_t *COLUMN = (volatile uint8_t*)0xC800;

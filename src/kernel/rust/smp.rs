@@ -27,7 +27,7 @@ const PAGE_SIZE: usize = 4096;
 const AP_CODE_SEGMENT: u16 = 0x18;
 const WORK_INTERRUPT: u8 = 0xf0;
 const SPURIOUS_INTERRUPT: u8 = 0xff;
-const TRAMPOLINE: &[u8] = include_bytes!(env!("NYVELA_AP_BOOT"));
+const TRAMPOLINE: &[u8] = include_bytes!(env!("LUMEN_AP_BOOT"));
 const _: () = assert!(TRAMPOLINE.len() == STACKS - AP_BASE + 256 * size_of::<usize>());
 
 const OFFLINE: u8 = 0;
@@ -106,14 +106,14 @@ static mut AP_IDT: [Gate; 256] = [Gate::EMPTY; 256];
 
 global_asm!(
     ".pushsection .text",
-    "nyvela_ap_wake:",
+    "lumen_ap_wake:",
     "push rax",
     "movabs rax, 0xffff8000fee000b0",
     "mov dword ptr [rax], 0",
     "pop rax",
-    "nyvela_ap_spurious:",
+    "lumen_ap_spurious:",
     "iretq",
-    "nyvela_ap_fault:",
+    "lumen_ap_fault:",
     "cli",
     "2:",
     "hlt",
@@ -122,9 +122,9 @@ global_asm!(
 );
 
 unsafe extern "C" {
-    fn nyvela_ap_wake();
-    fn nyvela_ap_spurious();
-    fn nyvela_ap_fault();
+    fn lumen_ap_wake();
+    fn lumen_ap_spurious();
+    fn lumen_ap_fault();
 }
 
 fn lapic_read(register: usize) -> u32 {
@@ -209,9 +209,9 @@ fn start_processor(id: u8) -> bool {
 }
 
 fn prepare_trampoline() {
-    let mut gates = [Gate::interrupt(nyvela_ap_fault); 256];
-    gates[usize::from(WORK_INTERRUPT)] = Gate::interrupt(nyvela_ap_wake);
-    gates[usize::from(SPURIOUS_INTERRUPT)] = Gate::interrupt(nyvela_ap_spurious);
+    let mut gates = [Gate::interrupt(lumen_ap_fault); 256];
+    gates[usize::from(WORK_INTERRUPT)] = Gate::interrupt(lumen_ap_wake);
+    gates[usize::from(SPURIOUS_INTERRUPT)] = Gate::interrupt(lumen_ap_spurious);
     // The BSP publishes the IDT and trampoline before the first startup IPI.
     unsafe {
         ptr::addr_of_mut!(AP_IDT).write(gates);
@@ -222,7 +222,7 @@ fn prepare_trampoline() {
         );
         ptr::with_exposed_provenance_mut::<u64>(PARAMS).write(bindings::kernel_cr3);
         ptr::with_exposed_provenance_mut::<usize>(PARAMS + 8)
-            .write((nyvela_ap_main as *const ()).addr());
+            .write((lumen_ap_main as *const ()).addr());
     }
 }
 
@@ -275,7 +275,7 @@ fn probe_local_apic(id: u8, seed: usize) -> usize {
     }
 }
 
-extern "C" fn nyvela_ap_main(id: usize) -> ! {
+extern "C" fn lumen_ap_main(id: usize) -> ! {
     let worker = &WORKERS[id];
     let idtr = Idtr {
         limit: (size_of::<[Gate; 256]>() - 1) as u16,
@@ -312,7 +312,7 @@ extern "C" fn nyvela_ap_main(id: usize) -> ! {
 /// The BSP must call this once with exclusive kernel access, before the
 /// scheduler starts and after installing the identity and local APIC mappings.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn nyvela_smp_init() {
+pub unsafe extern "C" fn lumen_smp_init() {
     let mut console = unsafe { BootConsole::new() };
     let Some(mut enabled) = acpi::enabled_apic_ids() else {
         console.write("SMP: firmware CPU list unavailable, using the boot processor\n");

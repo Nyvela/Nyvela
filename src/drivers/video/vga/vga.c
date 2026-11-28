@@ -1,4 +1,4 @@
-#include "../../../../include/nyvela/drivers/video/vga/vga.h"
+#include "../../../../include/lumen/drivers/video/vga/vga.h"
 
 volatile uint16_t* VGA_MEM = (volatile uint16_t*)0xB8000;
 

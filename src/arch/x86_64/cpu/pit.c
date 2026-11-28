@@ -1,6 +1,6 @@
-#include "../../../../include/nyvela/arch/x86_64/pit/pit.h"
-#include "../../../../include/nyvela/arch/x86_64/asm/io.h"
-#include "../../../../include/nyvela/arch/x86_64/asm/cpu.h"
+#include "../../../../include/lumen/arch/x86_64/pit/pit.h"
+#include "../../../../include/lumen/arch/x86_64/asm/io.h"
+#include "../../../../include/lumen/arch/x86_64/asm/cpu.h"
 
 volatile uint64_t pit_ticks = 0;
 

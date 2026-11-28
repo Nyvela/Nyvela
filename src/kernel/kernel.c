@@ -1,24 +1,24 @@
-#include "../../include/nyvela/drivers/video/console/console.h"
-#include "../../include/nyvela/lib/utils.h"
-#include "../../include/nyvela/mm/heap.h"
-#include "../../include/nyvela/mm/vmm.h"
-#include "../../include/nyvela/mm/pmm.h"
-#include "../../include/nyvela/arch/x86_64/idt.h"
-#include "../../include/nyvela/arch/x86_64/apic/apic.h"
-#include "../../include/nyvela/arch/x86_64/asm/cpu.h"
-#include "../../include/nyvela/thread/thread.h"
-#include "../../include/nyvela/arch/x86_64/gdt.h"
-#include "../../include/nyvela/arch/x86_64/pic/pic.h"
-#include "../../include/nyvela/arch/x86_64/pit/pit.h"
-#include "../../include/nyvela/fs/vfs.h"
-#include "../../include/nyvela/exec/exec.h"
-#include "../../include/nyvela/syscall/syscall.h"
-#include "../../include/nyvela/drivers/kbd/kbd.h"
-#include "../../include/nyvela/ktests/ktests.h"
-#include "../../include/nyvela/drivers/video/vga/vga.h"
-#include "../../include/nyvela/mm/dma.h"
+#include "../../include/lumen/drivers/video/console/console.h"
+#include "../../include/lumen/lib/utils.h"
+#include "../../include/lumen/mm/heap.h"
+#include "../../include/lumen/mm/vmm.h"
+#include "../../include/lumen/mm/pmm.h"
+#include "../../include/lumen/arch/x86_64/idt.h"
+#include "../../include/lumen/arch/x86_64/apic/apic.h"
+#include "../../include/lumen/arch/x86_64/asm/cpu.h"
+#include "../../include/lumen/thread/thread.h"
+#include "../../include/lumen/arch/x86_64/gdt.h"
+#include "../../include/lumen/arch/x86_64/pic/pic.h"
+#include "../../include/lumen/arch/x86_64/pit/pit.h"
+#include "../../include/lumen/fs/vfs.h"
+#include "../../include/lumen/exec/exec.h"
+#include "../../include/lumen/syscall/syscall.h"
+#include "../../include/lumen/drivers/kbd/kbd.h"
+#include "../../include/lumen/ktests/ktests.h"
+#include "../../include/lumen/drivers/video/vga/vga.h"
+#include "../../include/lumen/mm/dma.h"
 
-#include <nyvela/kernel/rust.h>
+#include <lumen/kernel/rust.h>
 
 extern uint8_t kernel_bss_start[], kernel_bss_end[];
 extern uint8_t shell_blob_end[], shell_blob_start[];
@@ -55,13 +55,13 @@ static void kload_user_bins(void) {
   kload_user_bin("/bin/sh", shell_blob_start, shell_blob_end);
   kload_user_bin("/bin/nvmed", nvmed_blob_start, nvmed_blob_end);
   kload_user_bin("/bin/npcid", npcid_blob_start, npcid_blob_end);
-  nyvela_image_t fat = nyvela_fat_image();
+  lumen_image_t fat = lumen_fat_image();
   kload_user_bin("/bin/fat", fat.bytes, fat.bytes + fat.length);
   kload_user_bin("/bin/hello", hello_blob_start, hello_blob_end);
   kload_user_bin("/bin/init", init_blob_start, init_blob_end);
 
   static const char readme[] =
-    "Welcome to Nyvela!\n"
+    "Welcome to Lumen!\n"
     "Try: help, ls, ls /bin, cat /readme.txt, run hello\n";
 
   if (vfs_create("/readme.txt", false) != VFS_OK) {
@@ -177,8 +177,8 @@ void kuserspace_init() {
 __attribute__((section(".text.entry")))
 void kmain(void) {
   memset(kernel_bss_start, 0, (uintptr_t)kernel_bss_end - (uintptr_t)kernel_bss_start);
-  kprintsucc("Nyvela kernel started.", 0x0F);
-  nyvela_rust_init();
+  kprintsucc("Lumen kernel started.", 0x0F);
+  lumen_rust_init();
 
   klog_ram_data();
 
@@ -259,7 +259,7 @@ void kmain(void) {
   
   kprintsucc("LAPIC timer setup complete.", 0x0F);
 
-  nyvela_smp_init();
+  lumen_smp_init();
 
   kpic_disable();
 

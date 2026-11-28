@@ -1,6 +1,6 @@
-#include "../../../../include/nyvela/arch/x86_64/gdt.h"
-#include "../../../../include/nyvela/lib/utils.h"
-#include "../../../../include/nyvela/mm/pmm.h"
+#include "../../../../include/lumen/arch/x86_64/gdt.h"
+#include "../../../../include/lumen/lib/utils.h"
+#include "../../../../include/lumen/mm/pmm.h"
 
 extern uint8_t kernel_stack_top[];
 

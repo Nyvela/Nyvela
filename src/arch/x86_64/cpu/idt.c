@@ -1,10 +1,10 @@
-#include "../../../../include/nyvela/arch/x86_64/idt.h"
-#include "../../../../include/nyvela/scheduler/scheduler.h"
-#include "../../../../include/nyvela/arch/x86_64/apic/apic.h"
-#include "../../../../include/nyvela/arch/x86_64/asm/desc.h"
-#include "../../../../include/nyvela/arch/x86_64/pic/pic.h"
-#include "../../../../include/nyvela/arch/x86_64/pit/pit.h"
-#include "../../../../include/nyvela/syscall/syscall.h"
+#include "../../../../include/lumen/arch/x86_64/idt.h"
+#include "../../../../include/lumen/scheduler/scheduler.h"
+#include "../../../../include/lumen/arch/x86_64/apic/apic.h"
+#include "../../../../include/lumen/arch/x86_64/asm/desc.h"
+#include "../../../../include/lumen/arch/x86_64/pic/pic.h"
+#include "../../../../include/lumen/arch/x86_64/pit/pit.h"
+#include "../../../../include/lumen/syscall/syscall.h"
 
 extern void isr_de();
 extern void isr_pf();
