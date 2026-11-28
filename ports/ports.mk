@@ -23,7 +23,7 @@ DOOM_OBJECTS := $(addprefix $(DOOM_BUILD)/,$(DOOM_FILES:.c=.o))
 DOOM_FLAGS := -O2 -ffunction-sections -fdata-sections -std=gnu17 -D_DEFAULT_SOURCE \
               -DNORMALUNIX -DLINUX -DSNDSERV
 
-.PHONY: ports run-ports run-desktop
+.PHONY: ports run-ports run-lumdesk
 
 ports: $(PORT_ARCHIVE)
 
@@ -77,6 +77,6 @@ $(PORT_ARCHIVE): $(PORT_ROOT)/bin/hello-std $(PORT_ROOT)/bin/sqlite3 \
 run-ports: $(IMAGE) $(QEMU_NVME_IMAGE) $(PORT_ARCHIVE)
 	$(QEMU) $(QEMU_COMMON) -fw_cfg name=opt/lumen/initrd,file=$(PORT_ARCHIVE) -serial stdio
 
-run-desktop: $(IMAGE) $(QEMU_NVME_IMAGE) $(PORT_ARCHIVE)
+run-lumdesk: $(IMAGE) $(QEMU_NVME_IMAGE) $(PORT_ARCHIVE)
 	$(QEMU) $(QEMU_COMMON) -fw_cfg name=opt/lumen/initrd,file=$(PORT_ARCHIVE) \
 		-fw_cfg name=opt/lumen/desktop,string=1 -serial stdio

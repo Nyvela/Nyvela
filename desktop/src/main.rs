@@ -12,10 +12,12 @@ mod login;
 mod storage;
 mod sys;
 mod ui;
+mod x11;
 
 fn main() {
     let result = match std::env::args().nth(1).as_deref() {
         Some("--session") => desktop::session(),
+        Some("--x11-session") => x11::session(),
         Some("--clock-client") => desktop::clock_client(),
         Some(_) => Err(std::io::Error::other("unsupported Lumdesk mode")),
         None => login::supervise(),

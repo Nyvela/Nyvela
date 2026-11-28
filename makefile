@@ -253,3 +253,4 @@ clean:
 
 include libc/libc.mk
 include ports/ports.mk
+include ports/x11/x11.mk

@@ -56,3 +56,26 @@ owner also reads PS/2 events and releases the display when done.
 and bit 9 for extended events. `DISPLAY_POINTER` writes a `Pointer`
 record to the specified buffer and returns 1. Both return zero when no
 event is waiting. The kernel releases the seat on process exit.
+
+
+## Local streams
+
+Call `OPEN_SOCKET` with `SOCKET_LOCAL_STREAM` to open a
+reliable ordered byte stream between processes on this machine. The
+native address type is `LocalEndpoint`. Its name is a nonempty byte string
+of up to 108 bytes, with any remaining bytes set to zero. Only processes
+with the same UID share a name namespace. Names are managed by the socket
+layer, so binding does not create a RAMFS file. Closing the listener
+releases its name.
+
+Use the same bind, listen, connect, accept and poll operations as IPv4
+sockets. Use `LocalEndpoint` for bind, connect and socket-address results.
+A client gets the listener name as its peer address. An accepted stream
+gets it as its local address. The other ends are unnamed. A zero-filled
+endpoint represents an unnamed address. Local streams support nonblocking
+I/O and closing the write side. The current implementation does not
+transfer descriptors or ancillary data.
+
+Lumen's musl translates POSIX `AF_UNIX` stream calls and `select` to these
+native operations. Filesystem-style names such as `/tmp/.X11-unix/X0` are
+opaque names within the caller's UID.

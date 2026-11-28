@@ -2,9 +2,11 @@ mod accounts;
 mod arch;
 mod elf;
 mod graphics;
+mod local_socket;
 mod memory;
 mod network;
 mod process;
+mod sockets;
 mod syscalls;
 
 const DEAD: u32 = 3;

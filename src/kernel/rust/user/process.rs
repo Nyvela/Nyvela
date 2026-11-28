@@ -13,8 +13,8 @@ use super::{
 };
 
 const MAX_PROCESSES: usize = 24;
-const ARGS_MAX: usize = 512;
-const PATH_MAX: usize = 256;
+const ARGS_MAX: usize = abi::ARGUMENT_LIMIT;
+const PATH_MAX: usize = abi::PATH_LIMIT;
 
 #[derive(Clone, Copy)]
 pub struct Identity {

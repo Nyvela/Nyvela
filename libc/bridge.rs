@@ -9,7 +9,7 @@ mod sys;
 
 use core::{panic::PanicInfo, ptr, slice};
 
-const ENOENT: i64 = -2;
+const ENOTDIR: i64 = -20;
 const EFAULT: i64 = -14;
 const EINVAL: i64 = -22;
 const ENOSYS: i64 = -38;
@@ -55,12 +55,16 @@ extern "C" fn __lumen_musl_call(n: u64, a: u64, b: u64, c: u64, d: u64, e: u64, 
         10 => native(abi::PROTECT_MEMORY, a, b, c, 0, 0),
         11 => native(abi::UNMAP_MEMORY, a, b, 0, 0, 0),
         12 => native(abi::BREAK, a, 0, 0, 0, 0),
-        13 | 14 | 28 | 131 => 0, // Single-threaded applications have no asynchronous signal handlers.
+        13 => signal_action(a, b, c, d),
+        14 => signal_mask(a, b, c, d),
+        28 | 131 => 0,
+        16 if b == 0x5421 => nonblocking(a, c), // FIONBIO
         16 => ENOTTY,
         17 => native(abi::READ_AT, a, b, c, d, 0),
         18 => native(abi::WRITE_AT, a, b, c, d, 0),
         19 | 20 => iov(n == 20, a, b, c),
         21 => access(abi::CURRENT_DIRECTORY, a),
+        23 => select(a, b, c, d, e, false),
         24 => native(abi::YIELD, 0, 0, 0, 0, 0),
         35 => sleep(a),
         39 | 186 | 218 => native(abi::SELF, 0, 0, 0, 0, 0),
@@ -115,7 +119,8 @@ extern "C" fn __lumen_musl_call(n: u64, a: u64, b: u64, c: u64, d: u64, e: u64, 
             0,
             0,
         ),
-        89 | 267 => ENOENT,
+        89 => readlink(abi::CURRENT_DIRECTORY, a),
+        267 => readlink(dir(a), b),
         96 => time(a, true),
         97 => resource(a, b),
         102 | 104 | 107 | 108 => native(abi::IDENTITY, 0, 0, 0, 0, 0).max(0),
@@ -148,6 +153,7 @@ extern "C" fn __lumen_musl_call(n: u64, a: u64, b: u64, c: u64, d: u64, e: u64, 
         263 if c & !0x200 == 0 => native(abi::REMOVE_PATH, b, dir(a), u64::from(c != 0), 0, 0),
         264 => native(abi::MOVE_PATH, b, dir(a), d, dir(c), 0),
         269 | 439 => access(dir(a), b),
+        270 => select(a, b, c, d, e, true),
         271 => {
             let timeout = if c == 0 {
                 -1
@@ -202,6 +208,27 @@ fn access(directory: u64, path: u64) -> i64 {
         0,
         0,
     )
+}
+
+fn readlink(directory: u64, path: u64) -> i64 {
+    let mut info = abi::FileInfo::default();
+    let result = native(
+        abi::INFO_PATH,
+        path,
+        (&raw mut info).addr() as u64,
+        directory,
+        0,
+        0,
+    );
+    if result < 0 {
+        return result;
+    }
+    // RAMFS currently exposes files and directories with no symlink entries.
+    let name = unsafe { core::ffi::CStr::from_ptr(path as *const core::ffi::c_char) };
+    if info.kind != abi::FILE_DIRECTORY && name.to_bytes().last() == Some(&b'/') {
+        return ENOTDIR;
+    }
+    EINVAL
 }
 
 fn stat(handle: bool, directory: u64, path: u64, output: u64) -> i64 {
@@ -325,6 +352,135 @@ fn iov(write: bool, fd: u64, address: u64, count: u64) -> i64 {
     total
 }
 
+// Signal settings are libc book-keeping in Lumen's single-threaded runtime.
+static mut SIGNAL_ACTIONS: [[u64; 4]; 65] = [[0; 4]; 65];
+static mut SIGNAL_MASK: u64 = 0;
+const UNMASKABLE: u64 = (1 << (9 - 1)) | (1 << (19 - 1));
+
+fn signal_action(signal: u64, input: u64, output: u64, size: u64) -> i64 {
+    if size != 8 || !(1..65).contains(&signal) || (input != 0 && matches!(signal, 9 | 19)) {
+        return EINVAL;
+    }
+    let action = unsafe { &mut (*(&raw mut SIGNAL_ACTIONS))[signal as usize] };
+    let old = *action;
+    if input != 0 {
+        *action = unsafe { (input as *const [u64; 4]).read_unaligned() };
+    }
+    if output != 0 {
+        unsafe { (output as *mut [u64; 4]).write_unaligned(old) };
+    }
+    0
+}
+
+fn signal_mask(operation: u64, input: u64, output: u64, size: u64) -> i64 {
+    if size != 8 || (input != 0 && operation > 2) {
+        return EINVAL;
+    }
+    let old = unsafe { SIGNAL_MASK };
+    if input != 0 {
+        let requested = unsafe { (input as *const u64).read_unaligned() };
+        let mask = match operation {
+            0 => old | requested,
+            1 => old & !requested,
+            _ => requested,
+        };
+        unsafe { SIGNAL_MASK = mask & !UNMASKABLE };
+    }
+    if output != 0 {
+        unsafe { (output as *mut u64).write_unaligned(old) };
+    }
+    0
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+struct PollFd {
+    fd: i32,
+    events: u16,
+    returned: u16,
+}
+
+fn select(count: u64, read: u64, write: u64, error: u64, timeout: u64, nanos: bool) -> i64 {
+    if count > 1024 {
+        return EINVAL;
+    }
+    let timeout = if timeout == 0 {
+        -1
+    } else {
+        let [seconds, fraction] = unsafe { (timeout as *const [i64; 2]).read_unaligned() };
+        let scale = if nanos { 1_000_000 } else { 1_000 };
+        if seconds < 0 || !(0..scale * 1000).contains(&fraction) {
+            return EINVAL;
+        }
+        seconds
+            .saturating_mul(1000)
+            .saturating_add((fraction + scale - 1) / scale)
+            .min(i32::MAX as i64)
+    };
+    let sets = [read, write, error];
+    let interests = [1, 4, 2];
+    let mut fds = [PollFd {
+        fd: -1,
+        events: 0,
+        returned: 0,
+    }; abi::HANDLE_LIMIT];
+    let mut used = 0;
+    for fd in 0..count as usize {
+        let mut events = 0;
+        for (set, event) in sets.into_iter().zip(interests) {
+            if set != 0 && unsafe { *((set as *const u8).add(fd / 8)) } & (1 << (fd % 8)) != 0 {
+                events |= event;
+            }
+        }
+        if events != 0 {
+            if fd >= fds.len() {
+                return -9;
+            }
+            fds[used] = PollFd {
+                fd: fd as i32,
+                events,
+                returned: 0,
+            };
+            used += 1;
+        }
+    }
+    let result = native(
+        abi::POLL,
+        fds.as_mut_ptr().addr() as u64,
+        used as u64,
+        timeout as u64,
+        0,
+        0,
+    );
+    if result < 0 {
+        return result;
+    }
+    if fds[..used].iter().any(|fd| fd.returned & 32 != 0) {
+        return -9;
+    }
+    let mut ready = 0;
+    for (set, event) in sets.into_iter().zip(interests) {
+        if set == 0 {
+            continue;
+        }
+        let bits =
+            unsafe { slice::from_raw_parts_mut(set as *mut u8, (count as usize).div_ceil(8)) };
+        bits.fill(0);
+        for fd in &fds[..used] {
+            let completion = match event {
+                1 => 1 | 8 | 16,
+                4 => 4 | 8,
+                _ => 2,
+            };
+            if fd.events & event != 0 && fd.returned & completion != 0 {
+                bits[fd.fd as usize / 8] |= 1 << (fd.fd as usize % 8);
+                ready += 1;
+            }
+        }
+    }
+    ready
+}
+
 fn millis(address: u64) -> Result<u64, i64> {
     if address == 0 {
         return Err(EFAULT);
@@ -366,7 +522,7 @@ fn resource(resource: u64, output: u64) -> i64 {
     }
     let limit: u64 = match resource {
         3 => 1024 * 1024,
-        7 => 13,
+        7 => abi::HANDLE_LIMIT as u64,
         0..=15 => u64::MAX,
         _ => return EINVAL,
     };
@@ -396,6 +552,20 @@ fn uname(output: u64) -> i64 {
         bytes[i * 65..i * 65 + field.len()].copy_from_slice(field);
     }
     0
+}
+
+fn nonblocking(fd: u64, argument: u64) -> i64 {
+    if argument == 0 {
+        return EFAULT;
+    }
+    let flags = native(abi::HANDLE_FLAGS, fd, 0, 0, 0, 0);
+    if flags < 0 {
+        return flags;
+    }
+    let enabled = unsafe { (argument as *const i32).read_unaligned() } != 0;
+    let flags =
+        (flags as u64 & !abi::OPEN_NONBLOCK) | (if enabled { abi::OPEN_NONBLOCK } else { 0 });
+    native(abi::HANDLE_FLAGS, fd, 1, flags, 0, 0)
 }
 
 fn handle_flags(fd: u64, command: u64, argument: u64) -> i64 {
@@ -447,15 +617,16 @@ fn handle_flags(fd: u64, command: u64, argument: u64) -> i64 {
 }
 
 fn socket(family: u64, kind: u64, protocol: u64) -> i64 {
-    if family != 2 {
-        return EAFNOSUPPORT;
-    }
-    if !matches!((kind & 0xf, protocol), (1, 0 | 6) | (2, 0 | 17)) {
-        return -93;
-    }
+    let kind_id = match (family, kind & 0xf, protocol) {
+        (1, 1, 0) => abi::SOCKET_LOCAL_STREAM,
+        (2, 1, 0 | 6) => abi::SOCKET_STREAM,
+        (2, 2, 0 | 17) => abi::SOCKET_DATAGRAM,
+        (1 | 2, _, _) => return -93,
+        _ => return EAFNOSUPPORT,
+    };
     native(
         abi::OPEN_SOCKET,
-        kind & 0xf,
+        kind_id,
         u64::from(kind & 0x800 != 0),
         0,
         0,
@@ -493,6 +664,34 @@ fn endpoint_out(endpoint: abi::Endpoint, address: u64, length: u64) {
 }
 
 fn address_call(operation: u64, fd: u64, address: u64, length: u64) -> i64 {
+    if address == 0 {
+        return EFAULT;
+    }
+    if length < 2 {
+        return EINVAL;
+    }
+    if unsafe { (address as *const u16).read_unaligned() } == 1 {
+        let family = native(abi::SOCKET_OPTION, fd, abi::SOCKET_DOMAIN, 0, 0, 0);
+        if family != abi::SOCKET_DOMAIN_LOCAL {
+            return if family < 0 { family } else { EAFNOSUPPORT };
+        }
+        let mut endpoint = abi::LocalEndpoint::EMPTY;
+        if length <= 2 || length > 110 {
+            return EINVAL;
+        }
+        unsafe {
+            ptr::copy_nonoverlapping(
+                (address + 2) as *const u8,
+                endpoint.name.as_mut_ptr(),
+                length as usize - 2,
+            );
+        }
+        return native(operation, fd, (&raw const endpoint).addr() as u64, 0, 0, 0);
+    }
+    let family = native(abi::SOCKET_OPTION, fd, abi::SOCKET_DOMAIN, 0, 0, 0);
+    if family != abi::SOCKET_DOMAIN_IPV4 {
+        return if family < 0 { family } else { EAFNOSUPPORT };
+    }
     match endpoint(address, length) {
         Ok(address) => native(operation, fd, (&raw const address).addr() as u64, 0, 0, 0),
         Err(error) => error,
@@ -502,6 +701,16 @@ fn address_call(operation: u64, fd: u64, address: u64, length: u64) -> i64 {
 fn socket_output(operation: u64, fd: u64, address: u64, length: u64, flags: u64) -> i64 {
     if address != 0 && length == 0 {
         return EFAULT;
+    }
+    if address != 0
+        && native(abi::SOCKET_OPTION, fd, abi::SOCKET_DOMAIN, 0, 0, 0) == abi::SOCKET_DOMAIN_LOCAL
+    {
+        let mut item = abi::LocalEndpoint::EMPTY;
+        let result = native(operation, fd, (&raw mut item).addr() as u64, flags, 0, 0);
+        if result >= 0 {
+            local_out(item, address, length);
+        }
+        return result;
     }
     let mut item = abi::Endpoint::default();
     let output = if address == 0 {
@@ -514,6 +723,26 @@ fn socket_output(operation: u64, fd: u64, address: u64, length: u64, flags: u64)
         endpoint_out(item, address, length);
     }
     result
+}
+
+fn local_out(endpoint: abi::LocalEndpoint, address: u64, length: u64) {
+    let name_length =
+        endpoint
+            .name
+            .iter()
+            .position(|&byte| byte == 0)
+            .map_or(endpoint.name.len(), |length| {
+                if length == 0 { 0 } else { length + 1 }
+            });
+    let mut bytes = [0_u8; 110];
+    bytes[..2].copy_from_slice(&1_u16.to_ne_bytes());
+    bytes[2..2 + name_length].copy_from_slice(&endpoint.name[..name_length]);
+    let actual = (name_length + 2) as u32;
+    unsafe {
+        let count = (length as *const u32).read_unaligned().min(actual);
+        ptr::copy_nonoverlapping(bytes.as_ptr(), address as *mut u8, count as usize);
+        (length as *mut u32).write_unaligned(actual);
+    }
 }
 
 fn socket_send(fd: u64, data: u64, size: u64, flags: u64, address: u64, length: u64) -> i64 {
@@ -544,6 +773,23 @@ fn socket_receive(fd: u64, data: u64, size: u64, flags: u64, address: u64, lengt
     if address != 0 && length == 0 {
         return EFAULT;
     }
+    if address != 0
+        && native(abi::SOCKET_OPTION, fd, abi::SOCKET_DOMAIN, 0, 0, 0) == abi::SOCKET_DOMAIN_LOCAL
+    {
+        let mut item = abi::LocalEndpoint::EMPTY;
+        let result = native(
+            abi::RECEIVE_SOCKET,
+            fd,
+            data,
+            size,
+            u64::from(flags & 0x40 != 0),
+            (&raw mut item).addr() as u64,
+        );
+        if result >= 0 {
+            local_out(item, address, length);
+        }
+        return result;
+    }
     let mut item = abi::Endpoint::default();
     let output = if address == 0 {
         0
@@ -572,6 +818,7 @@ fn socket_option(set: bool, fd: u64, level: u64, option: u64, value: u64, length
         2 => abi::SOCKET_REUSE,
         3 => abi::SOCKET_KIND,
         4 => abi::SOCKET_ERROR,
+        39 => abi::SOCKET_DOMAIN,
         20 | 66 => abi::SOCKET_READ_TIMEOUT,
         21 | 67 => abi::SOCKET_WRITE_TIMEOUT,
         _ => return -92,
@@ -598,7 +845,14 @@ fn socket_option(set: bool, fd: u64, level: u64, option: u64, value: u64, length
         };
         return native(abi::SOCKET_OPTION, fd, option, 1, argument, 0);
     }
-    let result = native(abi::SOCKET_OPTION, fd, option, 0, 0, 0);
+    let mut result = native(abi::SOCKET_OPTION, fd, option, 0, 0, 0);
+    if option == abi::SOCKET_DOMAIN {
+        result = match result {
+            abi::SOCKET_DOMAIN_LOCAL => 1,
+            abi::SOCKET_DOMAIN_IPV4 => 2,
+            _ => result,
+        };
+    }
     if result < 0 {
         return result;
     }

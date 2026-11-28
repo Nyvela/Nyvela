@@ -1,0 +1,15 @@
+--- a/Xtranssock.c
++++ b/Xtranssock.c
+@@ -973,0 +974 @@
++#ifndef __lumen__
+@@ -974,0 +976 @@
++#endif
+@@ -989 +991 @@
+-#ifdef UNIX_DIR
++#if defined(UNIX_DIR) && !defined(__lumen__)
+@@ -1028,0 +1031 @@
++#ifndef __lumen__
+@@ -1030 +1033,2 @@
+-	unlink (sockname.sun_path);
++        unlink(sockname.sun_path);
++#endif

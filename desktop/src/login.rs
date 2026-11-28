@@ -5,6 +5,7 @@ use crate::{
     accounts::Users,
     storage, sys,
     ui::{self, Input, Key, Rect, Screen},
+    x11,
 };
 
 const EXE: &str = "/bin/lumdesk";
@@ -83,7 +84,12 @@ pub fn supervise() -> io::Result<()> {
             continue;
         }
         screen.release();
-        let result = sys::spawn(EXE, &["--session"], u64::from(account.uid), sys::SEAT)
+        let session = if x11::installed() {
+            "--x11-session"
+        } else {
+            "--session"
+        };
+        let result = sys::spawn(EXE, &[session], u64::from(account.uid), sys::SEAT)
             .and_then(|child| sys::wait(child, false));
         screen.acquire()?;
         match result {

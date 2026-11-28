@@ -2,6 +2,7 @@
 use super::{
     accounts,
     process::{self, Identity},
+    sockets::Socket,
 };
 use crate::abi;
 use core::ptr;
@@ -26,8 +27,8 @@ const ESPIPE: i64 = -29;
 const ENAMETOOLONG: i64 = -36;
 const ENOSYS: i64 = -38;
 const AT_FDCWD: u64 = abi::CURRENT_DIRECTORY;
-const PATH_MAX: usize = 256;
-const FDS: usize = 10;
+const PATH_MAX: usize = abi::PATH_LIMIT;
+const FDS: usize = abi::HANDLE_LIMIT - 3;
 const IO_MAX: usize = 1024 * 1024;
 const MAX_MAPPING: u64 = 64 * 1024 * 1024;
 
@@ -74,7 +75,7 @@ impl Path {
 struct Fd {
     position: u64,
     flags: u64,
-    socket: Option<network::Socket>,
+    socket: Option<Socket>,
     file: Option<ramfs::Handle>,
     owner: u32,
 }
@@ -140,7 +141,7 @@ impl Process {
             .ok_or(EMFILE)
     }
 
-    fn socket(&mut self, fd: u64) -> Result<&mut network::Socket, i64> {
+    fn socket(&mut self, fd: u64) -> Result<&mut Socket, i64> {
         self.descriptor(fd)?.socket.as_mut().ok_or(-88) // ENOTSOCK
     }
 
@@ -170,7 +171,7 @@ impl Process {
             Ok(slot) => slot,
             Err(error) => return error,
         };
-        match network::open(kind, flags) {
+        match Socket::open(kind, flags, self.identity.account.uid) {
             Ok(socket) => {
                 self.fds[slot].socket = Some(socket);
                 slot as i64 + 3
@@ -180,26 +181,17 @@ impl Process {
     }
 
     fn socket_address(&mut self, connect: bool, fd: u64, address: u64) -> i64 {
-        let endpoint = match network::read_address(self.space.0, address) {
-            Ok(endpoint) => endpoint,
-            Err(error) => return error,
-        };
-        self.socket(fd).map_or_else(
-            |error| error,
-            |socket| {
-                if connect {
-                    socket.connect(endpoint)
-                } else {
-                    socket.bind(endpoint)
-                }
-            },
-        )
+        let cr3 = self.space.0;
+        self.socket(fd)
+            .and_then(|socket| socket.set_address(cr3, address, connect))
+            .err()
+            .unwrap_or(0)
     }
 
     fn socket_name(&mut self, peer: bool, fd: u64, address: u64) -> i64 {
         let cr3 = self.space.0;
         match self.socket(fd).and_then(|socket| socket.address(peer)) {
-            Ok(endpoint) => network::write_address(cr3, endpoint, address),
+            Ok(endpoint) => endpoint.write(cr3, address),
             Err(error) => error,
         }
     }
@@ -221,7 +213,7 @@ impl Process {
         };
         if address != 0 {
             let written = match socket.address(true) {
-                Ok(peer) => network::write_address(self.space.0, peer, address),
+                Ok(peer) => peer.write(self.space.0, address),
                 Err(error) => error,
             };
             if written != 0 {
@@ -283,7 +275,7 @@ impl Process {
         if let Some(source) = source
             && address != 0
         {
-            let written = network::write_address(cr3, source, address);
+            let written = source.write(cr3, address);
             if written != 0 {
                 return written;
             }
@@ -292,36 +284,8 @@ impl Process {
     }
 
     fn socket_option(&mut self, fd: u64, option: u64, set: bool, value: u64) -> i64 {
-        let socket = match self.socket(fd) {
-            Ok(socket) => socket,
-            Err(error) => return error,
-        };
-        match (option, set) {
-            (abi::SOCKET_KIND, false) => {
-                if socket.is_stream() {
-                    1
-                } else {
-                    2
-                }
-            }
-            (abi::SOCKET_ERROR, false) => i64::from(socket.pending_error()),
-            (abi::SOCKET_REUSE, false) => i64::from(socket.reuse_address),
-            (abi::SOCKET_READ_TIMEOUT, false) => socket.read_timeout as i64,
-            (abi::SOCKET_WRITE_TIMEOUT, false) => socket.write_timeout as i64,
-            (abi::SOCKET_REUSE, true) => {
-                socket.reuse_address = value != 0;
-                0
-            }
-            (abi::SOCKET_READ_TIMEOUT, true) => {
-                socket.read_timeout = value.min(i64::MAX as u64);
-                0
-            }
-            (abi::SOCKET_WRITE_TIMEOUT, true) => {
-                socket.write_timeout = value.min(i64::MAX as u64);
-                0
-            }
-            _ => -92,
-        }
+        self.socket(fd)
+            .map_or_else(|error| error, |socket| socket.option(option, set, value))
     }
 
     fn path(&self, dir: u64, address: u64) -> Result<Path, i64> {
@@ -407,6 +371,8 @@ impl Process {
             || (!write
                 && (path == b"/bin"
                     || path.starts_with(b"/bin/")
+                    || path == b"/usr/share/X11"
+                    || path.starts_with(b"/usr/share/X11/")
                     || matches!(path, b"/freedoom1.wad" | b"/readme.txt")))
     }
 
@@ -656,7 +622,11 @@ impl Process {
             Ok(path) => path,
             Err(error) => return error,
         };
-        if !self.can_access(path.path(), false) {
+        // Allow lookup of the shared ancestors of accessible paths. Reading
+        // their directory entries still requires an independently allowed open.
+        if !self.can_access(path.path(), false)
+            && !matches!(path.path(), b"/" | b"/home" | b"/usr" | b"/usr/share")
+        {
             return EACCES;
         }
         match ramfs::stat_with_inode(path.path()) {
@@ -833,7 +803,10 @@ impl Process {
         let tid = unsafe { (*thread).tid };
         let (a, b, c, d, e) = (frame.rdi, frame.rsi, frame.rdx, frame.r10, frame.r8);
         match frame.rax {
-            abi::EXIT => exit((a & 255) as i64),
+            abi::EXIT => {
+                self.close_sockets();
+                exit((a & 255) as i64)
+            }
             abi::WRITE => self.write(a, b, c, None),
             abi::READ => self.read(a, b, c, None),
             abi::YIELD => sleep(0),
@@ -1061,10 +1034,10 @@ impl Process {
         }
         match self.descriptor(fd) {
             Ok(file) if set == 0 => {
-                if let Some(socket) = file.socket {
+                if let Some(socket) = &mut file.socket {
                     (abi::OPEN_READ
                         | abi::OPEN_WRITE
-                        | if socket.nonblocking {
+                        | if *socket.nonblocking() {
                             abi::OPEN_NONBLOCK
                         } else {
                             0
@@ -1079,7 +1052,7 @@ impl Process {
             }
             Ok(file) => {
                 if let Some(socket) = &mut file.socket {
-                    socket.nonblocking = flags & abi::OPEN_NONBLOCK != 0;
+                    *socket.nonblocking() = flags & abi::OPEN_NONBLOCK != 0;
                 } else {
                     file.flags = (file.flags & !(abi::OPEN_APPEND | abi::OPEN_NONBLOCK))
                         | flags & (abi::OPEN_APPEND | abi::OPEN_NONBLOCK);
@@ -1089,15 +1062,19 @@ impl Process {
             Err(error) => error,
         }
     }
-}
 
-impl Drop for Process {
-    fn drop(&mut self) {
+    fn close_sockets(&mut self) {
         for slot in &mut self.fds {
             if let Some(socket) = slot.socket.take() {
                 socket.close();
             }
         }
+    }
+}
+
+impl Drop for Process {
+    fn drop(&mut self) {
+        self.close_sockets();
     }
 }
 

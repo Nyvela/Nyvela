@@ -1,0 +1,121 @@
+--- a/src/command.c
++++ b/src/command.c
+@@ -18,0 +19 @@
++#include <stdint.h>
+@@ -123,0 +125,5 @@
++#ifdef __lumen__
++   extern int64_t lumen_x11_launch(const char *);
++   if(command && lumen_x11_launch(command) < 0)
++      Warning(_("Could not start %s"), command);
++#else
+@@ -145 +151 @@
+-
++#endif
+--- a/src/main.c
++++ b/src/main.c
+@@ -246,0 +247,3 @@
++#ifdef __lumen__
++   extern void lumen_x11_reap(void);
++#endif
+@@ -248,0 +252,3 @@
++#ifdef __lumen__
++      lumen_x11_reap();
++#endif
+--- a/src/Makefile.in
++++ b/src/Makefile.in
+@@ -4,0 +5 @@
++LIBS = @LIBS@
+@@ -34 +35 @@
+-	$(CC) -o $(EXE) $(OBJECTS) $(LDFLAGS)
++	$(CC) -o $(EXE) $(OBJECTS) $(LDFLAGS) $(LIBS)
+--- a/example.jwmrc
++++ b/example.jwmrc
+@@ -6,18 +6,2 @@
+-        <Program icon="utilities-terminal" label="Terminal">xterm</Program>
+-        <Menu icon="folder" label="Applications">
+-            <Program icon="sound" label="Audacious">audacious</Program>
+-            <Program icon="calc" label="Calculator">xcalc</Program>
+-            <Program icon="web-browser" label="Firefox">firefox</Program>
+-            <Program icon="image" label="Gimp">gimp</Program>
+-            <Program icon="email" label="Mail">claws-mail</Program>
+-            <Program icon="system-file-manager" label="ROX">rox ~</Program>
+-        </Menu>
+-        <Menu icon="folder" label="Utilities">
+-            <Program icon="font" label="Fonts">xfontsel</Program>
+-            <Program icon="info" label="Window Properties">
+-                xprop | xmessage -file -
+-            </Program>
+-            <Program icon="info" label="Window Information">
+-                xwininfo | xmessage -file -
+-            </Program>
+-        </Menu>
++        <Program label="Text editor">/bin/xedit</Program>
++        <Program label="Clock">/bin/xclock</Program>
+@@ -25,6 +9 @@
+-        <Program icon="lock" label="Lock">
+-           xscreensaver-command -lock
+-        </Program>
+-        <Separator/>
+-        <Restart label="Restart" icon="reload"/>
+-        <Exit label="Exit" confirm="true" icon="exit"/>
++        <Exit label="Sign out" confirm="true"/>
+@@ -32,14 +10,0 @@
+-
+-    <!-- Options for program groups. -->
+-    <Group>
+-        <Option>tiled</Option>
+-    </Group>
+-    <Group>
+-        <Name>xterm</Name>
+-        <Option>vmax</Option>
+-    </Group>
+-    <Group>
+-        <Name>xclock</Name>
+-        <Option>drag</Option>
+-        <Option>notitle</Option>
+-    </Group>
+@@ -59,2 +23,0 @@
+-        <Swallow width="32" height="32" name="xclock">xclock</Swallow>
+-
+@@ -62 +25 @@
+-        <Clock format="%l:%M %p"><Button mask="123">exec:xclock</Button></Clock>
++        <Clock format="%l:%M %p"><Button mask="123">exec:/bin/xclock</Button></Clock>
+@@ -68 +31 @@
+-        <Font>Sans-12:bold</Font>
++        <Font>fixed</Font>
+@@ -81 +44 @@
+-        <Font>Sans-12</Font>
++        <Font>fixed</Font>
+@@ -87 +50 @@
+-      <Font>Sans-12</Font>
++      <Font>fixed</Font>
+@@ -109 +72 @@
+-        <Font>Sans-12</Font>
++        <Font>fixed</Font>
+@@ -119 +82 @@
+-        <Font>Sans-12</Font>
++        <Font>fixed</Font>
+@@ -123,23 +85,0 @@
+-
+-    <!-- Path where icons can be found.
+-         IconPath can be listed multiple times to allow searching
+-         for icons in multiple paths.
+-      -->
+-    <IconPath>
+-      /usr/local/share/icons/Tango/scalable/actions
+-    </IconPath>
+-    <IconPath>
+-      /usr/local/share/icons/Tango/scalable/apps
+-    </IconPath>
+-    <IconPath>
+-      /usr/local/share/icons/Tango/scalable/places
+-    </IconPath>
+-    <IconPath>
+-      /usr/local/share/icons/Tango/scalable/status
+-    </IconPath>
+-    <IconPath>
+-      /usr/local/share/icons/Tango/scalable/mimetypes
+-    </IconPath>
+-    <IconPath>
+-      /usr/local/share/jwm
+-    </IconPath>

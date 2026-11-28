@@ -72,12 +72,16 @@ pub const CURRENT_DIRECTORY: u64 = u64::MAX;
 pub const MAP_FIXED: u64 = 1;
 pub const SOCKET_STREAM: u64 = 1;
 pub const SOCKET_DATAGRAM: u64 = 2;
+pub const SOCKET_LOCAL_STREAM: u64 = 3;
 pub const NONBLOCK: u64 = 1;
 pub const SOCKET_KIND: u64 = 1;
 pub const SOCKET_ERROR: u64 = 2;
 pub const SOCKET_REUSE: u64 = 3;
 pub const SOCKET_READ_TIMEOUT: u64 = 4;
 pub const SOCKET_WRITE_TIMEOUT: u64 = 5;
+pub const SOCKET_DOMAIN: u64 = 6;
+pub const SOCKET_DOMAIN_IPV4: i64 = 0;
+pub const SOCKET_DOMAIN_LOCAL: i64 = 1;
 
 pub const FILE_REGULAR: u32 = 0;
 pub const FILE_DIRECTORY: u32 = 1;
@@ -130,3 +134,17 @@ pub struct Account {
 pub const DISPLAY_WIDTH: usize = 640;
 pub const DISPLAY_HEIGHT: usize = 400;
 pub const IPC_MAX: usize = 4112;
+
+pub const PATH_LIMIT: usize = 256;
+pub const ARGUMENT_LIMIT: usize = 512;
+pub const HANDLE_LIMIT: usize = 35;
+
+#[repr(C)]
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub struct LocalEndpoint {
+    pub name: [u8; 108],
+}
+
+impl LocalEndpoint {
+    pub const EMPTY: Self = Self { name: [0; 108] };
+}
