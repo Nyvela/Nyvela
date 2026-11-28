@@ -1,5 +1,5 @@
-#ifndef NYVUTILS_H
-#define NYVUTILS_H
+#ifndef LUMUTILS_H
+#define LUMUTILS_H
 
 #include <stdint.h>
 #include <stddef.h>
@@ -15,4 +15,4 @@ char *kstrcpy(char *dst, const char *src);
 char *kstrncpy(char *dst, const char *src, size_t n);
 int kmemcmp(const void *a, const void *b, size_t n);
 
-#endif // NYVUTILS_H
+#endif // LUMUTILS_H

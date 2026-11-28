@@ -1,5 +1,5 @@
-#ifndef NYVCPU_H
-#define NYVCPU_H
+#ifndef LUMCPU_H
+#define LUMCPU_H
 
 #include <stdint.h>
 
@@ -97,4 +97,4 @@ static inline void iretq(void) {
   __asm__ volatile ("iretq" ::: "memory");
 }
 
-#endif // NYVCPU_H
+#endif // LUMCPU_H

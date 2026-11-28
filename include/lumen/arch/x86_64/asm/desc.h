@@ -1,5 +1,5 @@
-#ifndef NYVDESC_H
-#define NYVDESC_H
+#ifndef LUMDESC_H
+#define LUMDESC_H
 
 static inline void desc_lidt(const void *idtr) {
   __asm__ volatile ("lidt %0" :: "m"(*(const unsigned char (*)[10])idtr));
@@ -27,4 +27,4 @@ static inline unsigned short desc_str(void) {
   return selector;
 }
 
-#endif // NYVDESC_H
+#endif // LUMDESC_H

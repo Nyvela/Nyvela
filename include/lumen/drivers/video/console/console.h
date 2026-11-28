@@ -1,5 +1,5 @@
-#ifndef NYVCONSOLE_H
-#define NYVCONSOLE_H
+#ifndef LUMCONSOLE_H
+#define LUMCONSOLE_H
 
 #include <stdint.h>
 
@@ -15,4 +15,4 @@ void kprintferr(const char *s, const uint8_t color);
 void kprintinit(const char *s, const uint8_t color);
 void kclear();
 
-#endif // NYVCONSOLE_H
+#endif // LUMCONSOLE_H

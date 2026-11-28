@@ -1,5 +1,5 @@
-#ifndef NYVPIT_H
-#define NYVPIT_H
+#ifndef LUMPIT_H
+#define LUMPIT_H
 
 #include <stdint.h>
 
@@ -17,4 +17,4 @@ extern volatile uint64_t pit_ticks;
 void kpit_set_freq(uint32_t freq);
 void kpit_wait_ms(uint64_t ms);
 
-#endif // NYVPIT_H
+#endif // LUMPIT_H

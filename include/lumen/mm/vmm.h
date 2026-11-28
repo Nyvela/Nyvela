@@ -1,5 +1,5 @@
-#ifndef NYVVMM_H
-#define NYVVMM_H
+#ifndef LUMVMM_H
+#define LUMVMM_H
 
 #include <stdint.h>
 
@@ -47,4 +47,4 @@ void kvmm_free_user_pml4(uint64_t pml4);
 
 bool is_shared_user_page(uint64_t virt);
 
-#endif // NYVVMM_H
+#endif // LUMVMM_H

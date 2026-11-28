@@ -18,21 +18,21 @@ The userspace programs live in sibling repositories. `make` reads their paths
 and build settings from `lumen.conf` in the repo root.
 
 ```make
-INIT_DIR = ../Nyvd
-INIT_BIN_NAME = nyvd
+INIT_DIR = ../Lumd
+INIT_BIN_NAME = lumd
 INIT_BUILD_COMMAND = USER_CFLAGS="-I$(CURDIR)/include $(X86_CFLAGS)" $(MAKE) -B -C $(INIT_DIR)
 
-SHELL_DIR = ../Nyvsh
+SHELL_DIR = ../Lumsh
 SHELL_BIN_NAME = shell
 SHELL_BUILD_COMMAND = make -C $(SHELL_DIR)
 
 NVMED_DIR = ../nvmed-rs
 NVMED_BIN_NAME = nvmed
 
-NPCID_DIR = ../Npcid
-NPCID_BIN_NAME = npcid
+LPCID_DIR = ../Lpcid
+LPCID_BIN_NAME = lpcid
 
-FAT_DIR = ../Nyvfat
+FAT_DIR = ../Lumfat
 ```
 
 Each key is required. `make` checks each with `ifndef` and
@@ -49,21 +49,21 @@ the key that is actually missing.
 | `SHELL_BUILD_COMMAND` | command that rebuilds it |
 | `NVMED_DIR` | directory of the `nvmed-rs` project (Rust NVMe driver) |
 | `NVMED_BIN_NAME` | base name of its flat binary; published as `/bin/nvmed` |
-| `NPCID_DIR` | directory of the `npcid` project |
-| `NPCID_BIN_NAME` | base name of its flat binary; published as `/bin/npcid` |
-| `FAT_DIR` | directory of the Nyvfat checkout, which produces `build/fat.bin` |
+| `LPCID_DIR` | directory of the `lpcid` project |
+| `LPCID_BIN_NAME` | base name of its flat binary; published as `/bin/lpcid` |
+| `FAT_DIR` | directory of the Lumfat checkout, which produces `build/fat.bin` |
 
-Lumen invokes recursive builds for nvmed, npcid, and Nyvfat.
+Lumen invokes recursive builds for nvmed, lpcid, and Lumfat.
 
 Lumen embeds the userspace binaries and publishes them into ramfs at boot.
-The assembly blobs use `incbin` and Nyvfat uses Rust's `include_bytes!`.
+The assembly blobs use `incbin` and Lumfat uses Rust's `include_bytes!`.
 
 | blob | published as |
 |------|--------------|
 | `init_blob.s` | `/bin/init` |
 | `shell_blob.s` | `/bin/sh` |
 | `nvmed_blob.s` | `/bin/nvmed` |
-| `npcid_blob.s` | `/bin/npcid` |
+| `lpcid_blob.s` | `/bin/lpcid` |
 | `exec.rs` | `/bin/fat` |
 
 Each userspace project provides its own flat binary.
@@ -78,7 +78,7 @@ this invocation. Building it by hand without that flag fails with
 The init binary is a prerequisite of every kernel object, but on its own that is
 not enough: `make` only reruns `$(INIT_BUILD_COMMAND)` when a listed prerequisite
 is newer than the target. Depending on `lumen.conf` alone means editing init
-sources does nothing, `nyvd.bin` keeps its old timestamp, and `incbin` embeds
+sources does nothing, `lumd.bin` keeps its old timestamp, and `incbin` embeds
 the previous build. The symptom is a kernel that boots a feature you already
 wrote - a new spawn target, a new `/bin` entry - and silently keeps the old
 behaviour, with no error anywhere.
@@ -96,13 +96,13 @@ $(INIT_BIN): makefile lumen.conf $(INIT_INPUTS)
 If you add a source root to your init project, add it to `INIT_INPUTS` too, or
 that root becomes invisible to the dependency graph.
 
-### nvmed and npcid
+### nvmed and lpcid
 
 `nvmed` is the userspace NVMe block service from the `nvmed-rs` checkout: a
 `no_std` Rust program whose own `makefile` runs Cargo for the
-`x86_64-unknown-none` target and produces `build/nvmed.bin`. `npcid` remains a C
+`x86_64-unknown-none` target and produces `build/nvmed.bin`. `lpcid` remains a C
 program. Both are out-of-tree user programs, embedded as `/bin/nvmed` and
-`/bin/npcid`. Both are located by the `NVMED_*` and `NPCID_*` keys described
+`/bin/lpcid`. Both are located by the `NVMED_*` and `LPCID_*` keys described
 above, and both are rebuilt by a recursive `make`:
 
 ```make
@@ -118,17 +118,17 @@ $(NVMED_BLOB_O): $(NVMED_BLOB_S) $(NVMED_BIN)
 	$(AS) $(ASFLAGS) -DNVMED_BIN=\"$(abspath $(NVMED_BIN))\" $< -o $@
 ```
 
-`npcid` is identical with `NPCID` substituted. The `-D` is load-bearing in both.
+`lpcid` is identical with `LPCID` substituted. The `-D` is load-bearing in both.
 An `incbin` of a relative path is resolved by `nasm` relative to the `.s` file and
 carries no timestamp, so the blob object stays valid no matter what the binary on
 disk contains - which is how an edited `nvmed` kept booting as its previous build.
 Passing the absolute path through a define ties the object to the binary, and the
 binary to its sources.
 
-Watch the variable names when copying one block to the other. A `NPCID_INPUTS:`
-line that mistakenly assigns `NVMED_INPUTS` compiles fine and leaves `npcid` with
+Watch the variable names when copying one block to the other. A `LPCID_INPUTS:`
+line that mistakenly assigns `NVMED_INPUTS` compiles fine and leaves `lpcid` with
 no prerequisites at all, so it is rebuilt only when the file is missing and
-`npcid.bin` edits silently boot the previous build.
+`lpcid.bin` edits silently boot the previous build.
 
 `SHELL_BIN` has no prerequisites at all, so it is rebuilt only when it is
 missing. That is fine for the out-of-tree shell, which has no source vendored

@@ -1,5 +1,5 @@
-#ifndef NYVVGA_H
-#define NYVVGA_H
+#ifndef LUMVGA_H
+#define LUMVGA_H
 
 #include <stdint.h>
 
@@ -12,4 +12,4 @@ uint16_t vga_read(uint8_t col, uint8_t row);
 
 void vga_fill_row(uint8_t row, uint16_t data);
 
-#endif // NYVIO_H
+#endif // LUMIO_H

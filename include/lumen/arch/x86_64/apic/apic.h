@@ -1,5 +1,5 @@
-#ifndef NYVAPIC_H
-#define NYVAPIC_H
+#ifndef LUMAPIC_H
+#define LUMAPIC_H
 
 #define IA32_APIC_BASE_MSR 0x1B
 #define IA32_APIC_BASE_MSR_MBR 0x100 // Processor is a BSP
@@ -30,4 +30,4 @@ extern volatile uint64_t lapic_ticks_ms;
 bool ksetup_lapic_timer();
 void klapic_eoi();
 
-#endif // NYVAPIC_H
+#endif // LUMAPIC_H

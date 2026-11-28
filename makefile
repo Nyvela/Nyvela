@@ -36,12 +36,12 @@ ifndef NVMED_BIN_NAME
 $(error NVMED_BIN_NAME is not configured. (see lumen.conf))
 endif
 
-ifndef NPCID_DIR
-$(error NPCID_DIR is not configured. (see lumen.conf))
+ifndef LPCID_DIR
+$(error LPCID_DIR is not configured. (see lumen.conf))
 endif
 
-ifndef NPCID_BIN_NAME
-$(error NPCID_BIN_NAME is not configured. (see lumen.conf))
+ifndef LPCID_BIN_NAME
+$(error LPCID_BIN_NAME is not configured. (see lumen.conf))
 endif
 
 ifndef FAT_DIR
@@ -58,9 +58,9 @@ NVMED_INPUTS := $(shell find $(NVMED_DIR)/src $(NVMED_DIR)/include -type f 2>/de
                 $(NVMED_DIR)/makefile $(NVMED_DIR)/linker.ld \
                 $(wildcard $(NVMED_DIR)/Cargo.toml $(NVMED_DIR)/Cargo.lock)
 
-NPCID_BIN := $(NPCID_DIR)/build/$(NPCID_BIN_NAME).bin
-NPCID_INPUTS := $(shell find $(NPCID_DIR)/src $(NPCID_DIR)/include -type f 2>/dev/null) \
-                $(NPCID_DIR)/makefile $(NPCID_DIR)/linker.ld
+LPCID_BIN := $(LPCID_DIR)/build/$(LPCID_BIN_NAME).bin
+LPCID_INPUTS := $(shell find $(LPCID_DIR)/src $(LPCID_DIR)/include -type f 2>/dev/null) \
+                $(LPCID_DIR)/makefile $(LPCID_DIR)/linker.ld
 
 FAT_BIN := $(FAT_DIR)/build/fat.bin
 FAT_INPUTS := $(wildcard $(FAT_DIR)/src/*.rs) $(FAT_DIR)/Cargo.toml \
@@ -120,8 +120,8 @@ SHELL_BLOB_O := $(BUILD)/user/blobs/shell_blob.o
 NVMED_BLOB_S := $(SRC_DIR)/user/blobs/nvmed_blob.s
 NVMED_BLOB_O := $(BUILD)/user/blobs/nvmed_blob.o
 
-NPCID_BLOB_S := $(SRC_DIR)/user/blobs/npcid_blob.s
-NPCID_BLOB_O := $(BUILD)/user/blobs/npcid_blob.o
+LPCID_BLOB_S := $(SRC_DIR)/user/blobs/lpcid_blob.s
+LPCID_BLOB_O := $(BUILD)/user/blobs/lpcid_blob.o
 
 ASFLAGS := -f elf64
 LDFLAGS := -T linker.ld
@@ -153,8 +153,8 @@ $(INIT_BIN): makefile lumen.conf $(INIT_INPUTS)
 $(NVMED_BIN): $(NVMED_INPUTS)
 	@$(MAKE) -C $(NVMED_DIR)
 
-$(NPCID_BIN): makefile $(NPCID_INPUTS)
-	@$(MAKE) -B -C $(NPCID_DIR) CC="$(CC) $(X86_CFLAGS)"
+$(LPCID_BIN): makefile $(LPCID_INPUTS)
+	@$(MAKE) -B -C $(LPCID_DIR) CC="$(CC) $(X86_CFLAGS)"
 
 $(FAT_BIN): $(FAT_INPUTS)
 	@$(MAKE) -C $(FAT_DIR)
@@ -207,9 +207,9 @@ $(NVMED_BLOB_O): $(NVMED_BLOB_S) $(NVMED_BIN)
 	@mkdir -p $(dir $@)
 	$(AS) $(ASFLAGS) -DNVMED_BIN=\"$(abspath $(NVMED_BIN))\" $< -o $@
 
-$(NPCID_BLOB_O): $(NPCID_BLOB_S) $(NPCID_BIN)
+$(LPCID_BLOB_O): $(LPCID_BLOB_S) $(LPCID_BIN)
 	@mkdir -p $(dir $@)
-	$(AS) $(ASFLAGS) -DNPCID_BIN=\"$(abspath $(NPCID_BIN))\" $< -o $@
+	$(AS) $(ASFLAGS) -DLPCID_BIN=\"$(abspath $(LPCID_BIN))\" $< -o $@
 
 $(BUILD)/kernel/kernel.o: include/lumen/kernel/rust.h
 

@@ -1,5 +1,5 @@
-#ifndef NYVSCHEDULER_H
-#define NYVSCHEDULER_H
+#ifndef LUMSCHEDULER_H
+#define LUMSCHEDULER_H
 
 #include "../../../include/lumen/arch/x86_64/context.h"
 #include "../../../include/lumen/thread/thread.h"
@@ -11,4 +11,4 @@
 thread_t* scheduler_next(void);
 void scheduler_tick(void);
 
-#endif // NYVSCHEDULER_H
+#endif // LUMSCHEDULER_H

@@ -1,5 +1,5 @@
-#ifndef NYVGDT_H
-#define NYVGDT_H
+#ifndef LUMGDT_H
+#define LUMGDT_H
 
 #include <stdint.h>
 #include <stddef.h>
@@ -62,4 +62,4 @@ extern tss_t tss;
 
 bool ktss_init();
 
-#endif // NYVGDT_H
+#endif // LUMGDT_H

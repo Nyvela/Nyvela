@@ -1,5 +1,5 @@
-#ifndef NYVCNTX_H
-#define NYVCNTX_H
+#ifndef LUMCNTX_H
+#define LUMCNTX_H
 
 #include <stddef.h>
 #include <stdint.h>
@@ -42,4 +42,4 @@ _Static_assert(sizeof(context_t) == 168, "context_t has unexpected size");
 context_t save_context();
 void switch_context(context_t* context);
 
-#endif // NYVCNTX_H
+#endif // LUMCNTX_H

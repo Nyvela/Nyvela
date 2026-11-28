@@ -1,5 +1,5 @@
-#ifndef NYVTHREAD_H
-#define NYVTHREAD_H
+#ifndef LUMTHREAD_H
+#define LUMTHREAD_H
 
 #include <stdint.h>
 #include <stddef.h>
@@ -47,4 +47,4 @@ extern uint64_t next_thread_id;
 thread_t* spawn_thread(void (*entry)(void), uint64_t cr3);
 void free_thread(thread_t* thread);
 
-#endif // NYVTHREAD_H
+#endif // LUMTHREAD_H

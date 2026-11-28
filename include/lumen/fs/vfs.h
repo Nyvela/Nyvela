@@ -1,5 +1,5 @@
-#ifndef NYV_VFS_H
-#define NYV_VFS_H
+#ifndef LUM_VFS_H
+#define LUM_VFS_H
 
 #include <stdint.h>
 #include <stdbool.h>
@@ -29,4 +29,4 @@ int64_t vfs_list(const char *path, char *buf, uint64_t len);
 
 int64_t vfs_size(const char *path);
 
-#endif // NYV_VFS_H
+#endif // LUM_VFS_H

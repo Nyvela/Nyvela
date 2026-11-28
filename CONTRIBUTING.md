@@ -17,19 +17,19 @@ tree:
 Example config:
 
 ```make
-INIT_DIR = ../Nyvd
-INIT_BIN_NAME = nyvd
+INIT_DIR = ../Lumd
+INIT_BIN_NAME = lumd
 INIT_BUILD_COMMAND = USER_CFLAGS="-I$(CURDIR)/include" make -C $(INIT_DIR)
 
-SHELL_DIR = ../nyvsh
+SHELL_DIR = ../lumsh
 SHELL_BIN_NAME = shell
 SHELL_BUILD_COMMAND = make -C $(SHELL_DIR)
 
 NVMED_DIR = ../nvmed-rs
 NVMED_BIN_NAME = nvmed
 
-NPCID_DIR = ../npcid
-NPCID_BIN_NAME = npcid
+LPCID_DIR = ../lpcid
+LPCID_BIN_NAME = lpcid
 ```
 
 Then `make && make run`. You should reach a `Lumen >` prompt.

@@ -1,5 +1,5 @@
-#ifndef NYVAS_H
-#define NYVAS_H
+#ifndef LUMAS_H
+#define LUMAS_H
 
 #include <stdint.h>
 
@@ -13,4 +13,4 @@ extern uint64_t addrspaces_length, addrspaces_size;
 
 addrspace_t* kaddrspace_create();
 
-#endif // NYVAS_H
+#endif // LUMAS_H

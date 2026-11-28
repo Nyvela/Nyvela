@@ -1,5 +1,5 @@
-#ifndef NYVCPUID_H
-#define NYVCPUID_H
+#ifndef LUMCPUID_H
+#define LUMCPUID_H
 
 #include <stdint.h>
 
@@ -12,4 +12,4 @@ typedef struct cpuid_result_t {
 
 cpuid_result_t cpuid(uint32_t leaf, uint32_t subleaf);
 
-#endif // NYVCPUID_H
+#endif // LUMCPUID_H

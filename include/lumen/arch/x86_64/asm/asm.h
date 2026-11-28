@@ -1,5 +1,5 @@
-#ifndef NYVASM_H
-#define NYVASM_H
+#ifndef LUMASM_H
+#define LUMASM_H
 
 #include "cpu.h"
 #include "desc.h"
@@ -8,4 +8,4 @@
 #include "cpuid.h"
 #include "out.h"
 
-#endif // NYVASM_H
+#endif // LUMASM_H

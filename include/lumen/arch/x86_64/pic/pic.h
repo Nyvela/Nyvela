@@ -1,5 +1,5 @@
-#ifndef NYVPIC_H
-#define NYVPIC_H
+#ifndef LUMPIC_H
+#define LUMPIC_H
 
 #include <stdint.h>
 
@@ -9,4 +9,4 @@ void kpic_disable();
 void kpic_enable_irq(uint8_t irq);
 void kpic_disable_irq(uint8_t irq);
 
-#endif // NYVPIC_H
+#endif // LUMPIC_H

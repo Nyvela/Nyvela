@@ -1,5 +1,5 @@
-#ifndef NYVHEAP_H
-#define NYVHEAP_H
+#ifndef LUMHEAP_H
+#define LUMHEAP_H
 
 #include <stdint.h>
 
@@ -15,4 +15,4 @@ void* kmalloc(uint64_t size);
 void* krealloc(void* ptr, uint64_t new_size);
 void kfree(void* ptr);
 
-#endif // NYVHEAP_H
+#endif // LUMHEAP_H

@@ -1,5 +1,5 @@
-#ifndef NYV_SYSLIB_H
-#define NYV_SYSLIB_H
+#ifndef LUM_SYSLIB_H
+#define LUM_SYSLIB_H
 
 #include <stdint.h>
 #include <stddef.h>
@@ -50,8 +50,8 @@
 #define USER_MMIO_MIN 0x40000000ULL
 #define USER_MMIO_MAX 0x80000000ULL
 
-#define NYVD_PAGES 4ULL
-#define NYVD_MAX (NYVD_PAGES * 4096ULL)
+#define LUMD_PAGES 4ULL
+#define LUMD_MAX (LUMD_PAGES * 4096ULL)
 
 #define PROG_BASE 0x500000ULL
 #define PROG_PAGES 16ULL
@@ -331,4 +331,4 @@ static inline void* realloc(void* ptr, uint64_t new_size) {
   return new_ptr;
 }
 
-#endif // NYV_SYSLIB_H
+#endif // LUM_SYSLIB_H

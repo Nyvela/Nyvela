@@ -1,5 +1,5 @@
-#ifndef NYVDMA_H
-#define NYVDMA_H
+#ifndef LUMDMA_H
+#define LUMDMA_H
 
 #include <stdint.h>
 
@@ -19,4 +19,4 @@ void kdma_pnfree(void *pages_start);
 extern uint8_t DMA_BITMAP[];
 extern uint64_t DMA_PAGES;
 
-#endif // NYVDMA_H
+#endif // LUMDMA_H

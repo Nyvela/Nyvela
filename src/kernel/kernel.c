@@ -25,7 +25,7 @@ extern uint8_t shell_blob_end[], shell_blob_start[];
 extern uint8_t hello_blob_end[], hello_blob_start[];
 extern uint8_t init_blob_end[], init_blob_start[];
 extern uint8_t nvmed_blob_end[], nvmed_blob_start[];
-extern uint8_t npcid_blob_end[], npcid_blob_start[];
+extern uint8_t lpcid_blob_end[], lpcid_blob_start[];
 
 static void kload_user_bin(const char *path, const uint8_t *blob_start, const uint8_t *blob_end) {
   uint64_t bin_size = (uint64_t)(blob_end - blob_start);
@@ -54,7 +54,7 @@ static void kload_user_bins(void) {
 
   kload_user_bin("/bin/sh", shell_blob_start, shell_blob_end);
   kload_user_bin("/bin/nvmed", nvmed_blob_start, nvmed_blob_end);
-  kload_user_bin("/bin/npcid", npcid_blob_start, npcid_blob_end);
+  kload_user_bin("/bin/lpcid", lpcid_blob_start, lpcid_blob_end);
   lumen_image_t fat = lumen_fat_image();
   kload_user_bin("/bin/fat", fat.bytes, fat.bytes + fat.length);
   kload_user_bin("/bin/hello", hello_blob_start, hello_blob_end);

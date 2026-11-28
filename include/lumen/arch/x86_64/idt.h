@@ -1,5 +1,5 @@
-#ifndef NYVIDT_H
-#define NYVIDT_H
+#ifndef LUMIDT_H
+#define LUMIDT_H
 
 #include <stdint.h>
 #include <stdbool.h>

@@ -1,5 +1,5 @@
-#ifndef NYVIO_H
-#define NYVIO_H
+#ifndef LUMIO_H
+#define LUMIO_H
 
 #include <stdint.h>
 
@@ -37,4 +37,4 @@ static inline void io_wait(void) {
   outb(0x80, 0);
 }
 
-#endif // NYVIO_H
+#endif // LUMIO_H

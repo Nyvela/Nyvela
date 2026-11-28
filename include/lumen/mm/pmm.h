@@ -1,5 +1,5 @@
-#ifndef NYVPMM_H
-#define NYVPMM_H
+#ifndef LUMPMM_H
+#define LUMPMM_H
 
 #include <stdint.h>
 
@@ -44,4 +44,4 @@ extern uint64_t FRAME_COUNT;
 
 #define MMAP_ENTRIES_MAX 512
 
-#endif // NYVPMM_H
+#endif // LUMPMM_H

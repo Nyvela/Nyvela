@@ -1,5 +1,5 @@
-#ifndef NYVIPC_H
-#define NYVIPC_H
+#ifndef LUMIPC_H
+#define LUMIPC_H
 
 #include <stdint.h>
 
@@ -21,4 +21,4 @@ void kipc_free_message(const ipc_msg_t *msg);
 bool kipc_send(ipc_msg_t msg);
 bool kipc_poll(ipc_msg_t* msg);
 
-#endif // NYVIPC_H
+#endif // LUMIPC_H

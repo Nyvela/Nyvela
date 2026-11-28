@@ -1,6 +1,6 @@
-#ifndef NYVOUT_H
-#define NYVOUT_H
+#ifndef LUMOUT_H
+#define LUMOUT_H
 
 #include "io.h"
 
-#endif // NYVOUT_H
+#endif // LUMOUT_H

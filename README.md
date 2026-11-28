@@ -18,7 +18,7 @@ Working:
   context switches
 - `int $0x80` syscalls: console, ramfs, exec, threads, address spaces, pages, IPC
 - a userspace init that spawns a separate ring3 shell
-- FAT32 file and directory operations on an NVMe namespace through Nyvfat
+- FAT32 file and directory operations on an NVMe namespace through Lumfat
 - ACPI processor discovery and Rust kernel workers on secondary xAPIC CPUs
 
 The boot processor runs the userspace scheduler. Secondary processors run
@@ -35,32 +35,32 @@ Clone the userspace dependencies next to the kernel checkout. Point
 `lumen.conf` at their locations if you use a different directory layout.
 
 ```sh
-git clone https://github.com/Lumen/Nyvd.git
-git clone https://github.com/Lumen/Nyvsh.git
-git clone https://github.com/Lumen/Npcid.git
+git clone https://github.com/amogus-gggy/Lumd.git
+git clone https://github.com/amogus-gggy/Lumsh.git
+git clone https://github.com/amogus-gggy/Lpcid.git
 git clone https://github.com/amogus-gggy/nvmed-rs.git
-git clone https://github.com/amogus-gggy/Nyvfat.git
+git clone https://github.com/amogus-gggy/Lumfat.git
 ```
 
 Example config:
 
 ```make
 # lumen.conf
-INIT_DIR = ../Nyvd
-INIT_BIN_NAME = nyvd
+INIT_DIR = ../Lumd
+INIT_BIN_NAME = lumd
 INIT_BUILD_COMMAND = USER_CFLAGS="-I$(CURDIR)/include $(X86_CFLAGS)" $(MAKE) -B -C $(INIT_DIR)
 
-SHELL_DIR = ../Nyvsh
+SHELL_DIR = ../Lumsh
 SHELL_BIN_NAME = shell
 SHELL_BUILD_COMMAND = make -C $(SHELL_DIR)
 
 NVMED_DIR = ../nvmed-rs
 NVMED_BIN_NAME = nvmed
 
-NPCID_DIR = ../Npcid
-NPCID_BIN_NAME = npcid
+LPCID_DIR = ../Lpcid
+LPCID_BIN_NAME = lpcid
 
-FAT_DIR = ../Nyvfat
+FAT_DIR = ../Lumfat
 ```
 
 Then:

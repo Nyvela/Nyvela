@@ -1,5 +1,5 @@
-#ifndef NYV_SYSCALL_H
-#define NYV_SYSCALL_H
+#ifndef LUM_SYSCALL_H
+#define LUM_SYSCALL_H
 
 #include <stdint.h>
 #include <stdbool.h>
@@ -58,4 +58,4 @@ typedef struct syscall_frame {
 void syscall_handler(syscall_frame_t *f);
 bool syscall_init(void);
 
-#endif // NYV_SYSCALL_H
+#endif // LUM_SYSCALL_H
