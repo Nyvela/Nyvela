@@ -41,6 +41,8 @@ void kipc_free_message(const ipc_msg_t *msg) {
 }
 
 bool kipc_send(ipc_msg_t msg) {
+  if (!msg.target) return false;
+
   thread_t* thread = NULL;
 
   for (uint64_t i = 0; i < threads_length; i++) {

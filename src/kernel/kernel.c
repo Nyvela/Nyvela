@@ -78,6 +78,16 @@ static void kload_user_bins(void) {
 }
 
 void kuserspace_init() {
+  uint64_t first_user_tid = next_thread_id;
+  thread_t *idle = spawn_thread(lumen_idle, kernel_cr3);
+  if (!idle) {
+    kprintferr("Failed to create idle thread.", 0x0F);
+    hang();
+  }
+  // Legacy clients contact /bin/init at TID 1. Reserve TID 0 for idle.
+  idle->tid = 0;
+  next_thread_id = first_user_tid;
+
   uint64_t cr3 = kvmm_create_user_pml4();
 
   if (!cr3) {
@@ -239,6 +249,10 @@ void kmain(void) {
   }
   
   kprintsucc("IDT ready.", 0x0F);  
+  lumen_arch_user_init();
+  lumen_user_memory_test();
+  lumen_graphics_prepare();
+  lumen_network_init();
 
   kpic_init();
 
@@ -280,8 +294,10 @@ void kmain(void) {
   }
 
   kprintsucc("VFS ready.", 0x0F);
+  lumen_ramfs_test();
 
   kload_user_bins();
+  lumen_initrd();
 
   kprintsucc("User binaries ready (/bin/hello).", 0x0F);
 

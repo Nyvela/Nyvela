@@ -35,11 +35,20 @@ static bool user_page_ok(uint64_t virt) {
   return user_range_ok(virt, 0) && !is_shared_user_page(virt);
 }
 
+static bool user_pages_ok(uint64_t addr, uint64_t len, uint64_t flags) {
+  if (!user_range_ok(addr, len)) return false;
+  for (uint64_t page = addr & ~0xFFFULL; len && page < addr + len; page += 4096) {
+    uint64_t *pte = kget_pte_addr(page);
+    if (!pte || (*pte & flags) != flags) return false;
+  }
+  return true;
+}
+
 static int copy_user_path(uint64_t uaddr, char *out) {
   if (uaddr < USER_AREA_BASE || uaddr >= USER_AREA_END) return -1;
 
   for (size_t i = 0; i < SYSCALL_MAX_PATH; i++) {
-    if (uaddr + i >= USER_AREA_END) return -1;
+    if (!user_pages_ok(uaddr + i, 1, 0x05)) return -1;
 
     char c = *(volatile char *)(uaddr + i);
     out[i] = c;
@@ -55,7 +64,7 @@ static int copy_user_path(uint64_t uaddr, char *out) {
 static int copy_from_user(uint64_t uaddr, void *kbuf, uint64_t len) {
   if (len == 0) return 0;
   if (!kbuf) return -1;
-  if (!user_range_ok(uaddr, len)) return -1;
+  if (!user_pages_ok(uaddr, len, 0x05)) return -1;
 
   memcpy(kbuf, (void *)uaddr, (size_t)len);
 
@@ -65,7 +74,7 @@ static int copy_from_user(uint64_t uaddr, void *kbuf, uint64_t len) {
 static int copy_to_user(uint64_t uaddr, const void *kbuf, uint64_t len) {
   if (len == 0) return 0;
   if (!kbuf) return -1;
-  if (!user_range_ok(uaddr, len)) return -1;
+  if (!user_pages_ok(uaddr, len, 0x07)) return -1;
 
   memcpy((void *)uaddr, kbuf, (size_t)len);
 
@@ -325,6 +334,19 @@ static void sys_exec(syscall_frame_t *f) {
 
   if (size < 0) {
     f->rax = (uint64_t)size;
+    return;
+  }
+
+  uint8_t signature[4];
+  if (vfs_read(path, signature, sizeof(signature), 0) == sizeof(signature) &&
+      signature[0] == 0x7f && signature[1] == 'E' &&
+      signature[2] == 'L' && signature[3] == 'F') {
+    uint8_t args[512];
+    if (f->rdx > sizeof(args) || copy_from_user(f->rsi, args, f->rdx) != 0) {
+      f->rax = (uint64_t)(int64_t)VFS_ERR_INVAL;
+      return;
+    }
+    f->rax = (uint64_t)lumen_exec_elf(path, kstrlen(path) + 1, args, f->rdx, (uint64_t)size);
     return;
   }
 
@@ -839,7 +861,7 @@ void sys_free_thread(syscall_frame_t* f) {
     }
   }
 
-  if (!t) {
+  if (!t || t->elf_process || t->context->cs == GDT_KCODE_LM_SEGMENT) {
     f->rax = (uint64_t)(int64_t)VFS_ERR_INVAL;
     return;
   }
@@ -952,6 +974,10 @@ static void sys_nvme_claim(syscall_frame_t *f) {
 
 void syscall_handler(syscall_frame_t *f) {
   if (!f) return;
+  if (current_thread && current_thread->elf_process) {
+    f->rax = (uint64_t)-38;
+    return;
+  }
 
   switch (f->rax) {
     case SYS_CLOCK_MS:

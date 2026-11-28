@@ -6,7 +6,11 @@ mod bindings;
 mod console;
 mod cpuinfo;
 mod exec;
+mod initrd;
+mod pci;
+mod ramfs;
 mod smp;
+mod user;
 
 use core::panic::PanicInfo;
 

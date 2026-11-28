@@ -7,10 +7,21 @@
 #include "../../../../include/lumen/syscall/syscall.h"
 
 extern void isr_de();
+extern void isr_db();
+extern void isr_bp();
+extern void isr_of();
+extern void isr_br();
 extern void isr_pf();
 extern void isr_gp();
 extern void isr_ud();
+extern void isr_nm();
 extern void isr_df();
+extern void isr_ts();
+extern void isr_np();
+extern void isr_ss();
+extern void isr_mf();
+extern void isr_ac();
+extern void isr_xm();
 extern void isr_lapic_timer();
 extern void isr_pit();
 extern void isr_kbd();
@@ -23,7 +34,7 @@ void idt_set_gate_ist(int vector, void (*handler)(void), uint8_t ist) {
 
   IDT[vector].offset_low = addr & 0xFFFF;
   IDT[vector].selector = 0x28;
-  IDT[vector].ist_flags = (uint8_t)((ist & 7) << 5);
+  IDT[vector].ist_flags = (uint8_t)(ist & 7);
   IDT[vector].type_attr = 0x8E;
   IDT[vector].offset_mid = (addr >> 16) & 0xFFFF;
   IDT[vector].offset_high = (addr >> 32) & 0xFFFFFFFF;
@@ -65,10 +76,21 @@ void isr_pit_handler() {
 
 bool kidt_init() {
   idt_set_gate(0x00, isr_de);
+  idt_set_gate(0x01, isr_db);
+  idt_set_gate_user(0x03, isr_bp);
+  idt_set_gate_user(0x04, isr_of);
+  idt_set_gate(0x05, isr_br);
   idt_set_gate(0x06, isr_ud);
+  idt_set_gate(0x07, isr_nm);
   idt_set_gate_ist(0x08, isr_df, 2);
-  idt_set_gate_ist(0x0E, isr_pf, 1);
+  idt_set_gate(0x0A, isr_ts);
+  idt_set_gate(0x0B, isr_np);
+  idt_set_gate(0x0C, isr_ss);
   idt_set_gate(0x0D, isr_gp);
+  idt_set_gate_ist(0x0E, isr_pf, 1);
+  idt_set_gate(0x10, isr_mf);
+  idt_set_gate(0x11, isr_ac);
+  idt_set_gate(0x13, isr_xm);
   idt_set_gate(0x20, isr_pit);
   idt_set_gate(0x21, isr_kbd);
   idt_set_gate(LAPIC_TIMER_VECTOR, isr_lapic_timer);

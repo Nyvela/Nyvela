@@ -1,6 +1,7 @@
 #include "../../../include/lumen/drivers/kbd/kbd.h"
 #include "../../../include/lumen/arch/x86_64/asm/io.h"
 #include "../../../include/lumen/arch/x86_64/pic/pic.h"
+#include <lumen/kernel/rust.h>
 
 #define KBD_DATA 0x60
 #define KBD_STATUS 0x64
@@ -67,6 +68,7 @@ static void kbd_push(char c) {
 }
 
 static void kbd_handle_code(uint8_t code) {
+  if (lumen_graphics_key(code)) return;
   if (code == 0xE0) {
     kbd_e0 = true;
     return;

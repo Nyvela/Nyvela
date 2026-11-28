@@ -8,14 +8,17 @@
 * `make`
 * `qemu-system-x86_64`
 * `dosfstools` to create the default FAT32 disk image
-* Rust 1.85+ with the `x86_64-unknown-none` target
+* Rust 1.88+ with the `x86_64-unknown-none` target
 
 Tested on Linux with GCC 13+ and QEMU 8+.
 
 ## lumen.conf
 
-The userspace programs live in sibling repositories. `make` reads their paths
-and build settings from `lumen.conf` in the repo root.
+The legacy service programs live in sibling repositories. `make` defaults to
+the standard checkout names and accepts overrides in `lumen.conf`.
+Clone Lumfw, Lumgfx and Lumeth alongside Lumen for the kernel's Rust drivers.
+For the Clang and Rust standard-library toolchains, see
+[Static ELF applications](ports.md).
 
 ```make
 INIT_DIR = ../Lumd
@@ -34,10 +37,6 @@ LPCID_BIN_NAME = lpcid
 
 FAT_DIR = ../Lumfat
 ```
-
-Each key is required. `make` checks each with `ifndef` and
-`$(error)`, so there are no defaults to fall back on. Each error message names
-the key that is actually missing.
 
 | key | meaning |
 |-----|---------|
@@ -89,7 +88,7 @@ So the rule also depends on the init project's own sources:
 INIT_INPUTS := $(shell find $(INIT_DIR)/src $(INIT_DIR)/include -type f 2>/dev/null) \
                $(INIT_DIR)/makefile $(INIT_DIR)/linker.ld
 
-$(INIT_BIN): makefile lumen.conf $(INIT_INPUTS)
+$(INIT_BIN): makefile $(wildcard lumen.conf) $(INIT_INPUTS)
 	$(INIT_BUILD_COMMAND)
 ```
 

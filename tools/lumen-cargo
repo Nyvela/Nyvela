@@ -1,0 +1,12 @@
+#!/bin/sh
+set -eu
+
+export CARGO_TARGET_X86_64_UNKNOWN_LINUX_MUSL_LINKER=rust-lld
+export CARGO_TARGET_X86_64_UNKNOWN_LINUX_MUSL_RUSTFLAGS='-C relocation-model=static -C target-feature=+crt-static -C link-self-contained=yes -C link-arg=--image-base=0x50000000'
+tool_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+export CC_x86_64_unknown_linux_musl="${CC_x86_64_unknown_linux_musl:-$tool_dir/lumen-clang}"
+command=${1:-build}
+if [ "$#" -gt 0 ]; then
+    shift
+fi
+exec "${CARGO:-cargo}" "$command" --target x86_64-unknown-linux-musl "$@"
