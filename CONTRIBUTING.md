@@ -7,12 +7,12 @@ misunderstanding.
 ## Getting set up
 
 You need `gcc` with C23 support, `nasm`, `ld`, `objcopy`, `make`,
-`qemu-system-x86_64`, and Rust 1.85 or later. Install the freestanding Rust
+`qemu-system-x86_64`, and Rust 1.88 or later. Install the freestanding Rust
 target with `rustup target add x86_64-unknown-none`.
 
-`make` will not run without a `lumen.conf`. Lumen is kernel-only, so the
-config points at the two userspace programs it boots into, both outside the
-tree:
+Clone the service and driver repositories listed in the README. The
+standard sibling checkout names work by default. A `lumen.conf` can override
+legacy service paths:
 
 Example config:
 
@@ -92,9 +92,8 @@ saved user RSP, so red-zone locals are clobbered across a context switch. C
 needs `-mno-red-zone` (it is in `USER_CFLAGS`), Rust needs `-C no-redzone=yes`
 (it is in the shell project's cargo `RUSTFLAGS`). Please do not remove either.
 
-**Faults are log-and-halt.** There is no recovery and no IST yet, so a ring3
-fault stops the machine. That is expected behaviour right now, not a new bug -
-but it also means you cannot test recovery paths that do not exist.
+**Foreground ELF faults return to the shell.** A CPL3 fault is reported
+as an exit status. CPL0 faults stop the kernel and print the fault registers.
 
 ## Pull requests
 

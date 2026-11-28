@@ -1,55 +1,23 @@
-include lumen.conf
+-include lumen.conf
 
-ifndef INIT_DIR
-$(error INIT_DIR is not configured. (see lumen.conf))
-endif
+.DEFAULT_GOAL := all
 
-ifeq ($(wildcard $(INIT_DIR)/.),)
-$(error init directory $(INIT_DIR) does not exist. (see lumen.conf))
-endif
-
-ifndef INIT_BIN_NAME
-$(error INIT_BIN_NAME is not configured. (see lumen.conf))
-endif
-
-ifndef INIT_BUILD_COMMAND
-$(error INIT_BUILD_COMMAND is not configured. (see lumen.conf))
-endif
-
-ifndef SHELL_DIR
-$(error SHELL_DIR is not configured. (see lumen.conf))
-endif
-
-ifndef SHELL_BIN_NAME
-$(error SHELL_BIN_NAME is not configured. (see lumen.conf))
-endif
-
-ifndef SHELL_BUILD_COMMAND
-$(error SHELL_BUILD_COMMAND is not configured. (see lumen.conf))
-endif
-
-ifndef NVMED_DIR
-$(error NVMED_DIR is not configured. (see lumen.conf))
-endif
-
-ifndef NVMED_BIN_NAME
-$(error NVMED_BIN_NAME is not configured. (see lumen.conf))
-endif
-
-ifndef LPCID_DIR
-$(error LPCID_DIR is not configured. (see lumen.conf))
-endif
-
-ifndef LPCID_BIN_NAME
-$(error LPCID_BIN_NAME is not configured. (see lumen.conf))
-endif
-
-ifndef FAT_DIR
-$(error FAT_DIR is not configured. (see lumen.conf))
-endif
+INIT_DIR ?= ../Lumd
+INIT_BIN_NAME ?= lumd
+INIT_BUILD_COMMAND ?= USER_CFLAGS="-I$(CURDIR)/include $(X86_CFLAGS)" $(MAKE) -C $(INIT_DIR)
+SHELL_DIR ?= ../Lumsh
+SHELL_BIN_NAME ?= shell
+SHELL_BUILD_COMMAND ?= $(MAKE) -C $(SHELL_DIR)
+NVMED_DIR ?= ../nvmed-rs
+NVMED_BIN_NAME ?= nvmed
+LPCID_DIR ?= ../Lpcid
+LPCID_BIN_NAME ?= lpcid
+FAT_DIR ?= ../Lumfat
 
 INIT_BIN := $(INIT_DIR)/build/$(INIT_BIN_NAME).bin
 SHELL_BIN := $(SHELL_DIR)/build/$(SHELL_BIN_NAME).bin
+SHELL_INPUTS := $(wildcard $(SHELL_DIR)/src/*.rs) $(SHELL_DIR)/makefile \
+                $(SHELL_DIR)/Cargo.toml $(SHELL_DIR)/linker.ld
 INIT_INPUTS := $(shell find $(INIT_DIR)/src $(INIT_DIR)/include -type f 2>/dev/null) \
                $(INIT_DIR)/makefile $(INIT_DIR)/linker.ld
 
@@ -97,7 +65,7 @@ X86_CFLAGS := -m64 -mno-red-zone -mgeneral-regs-only
 CFLAGS := -std=gnu2x -ffreestanding $(X86_CFLAGS) \
           -fno-stack-protector -fno-pie \
           -Wall -Wextra \
-          -Iinclude -g
+          -Iinclude -g -MMD -MP
 
 USER_CFLAGS := -std=gnu2x -ffreestanding $(X86_CFLAGS) \
           -fno-stack-protector -fno-pie -fno-pic \
@@ -140,14 +108,20 @@ RUST_DIR := $(SRC_DIR)/kernel/rust
 RUST_LIB := $(BUILD)/kernel/liblumen_rust.a
 RUST_CARGO_TARGET := $(BUILD)/kernel/cargo
 RUST_SOURCES := $(shell find $(RUST_DIR) -type f -name '*.rs') \
-                $(RUST_DIR)/Cargo.toml $(RUST_DIR)/Cargo.lock
+                $(RUST_DIR)/Cargo.toml $(RUST_DIR)/Cargo.lock \
+                ../Lumfw/Cargo.toml $(wildcard ../Lumfw/src/*.rs) \
+                ../Lumgfx/Cargo.toml $(wildcard ../Lumgfx/src/*.rs) \
+                ../Lumeth/Cargo.toml $(wildcard ../Lumeth/src/*.rs) \
+                ../Lumouse/Cargo.toml $(wildcard ../Lumouse/src/*.rs) sdk/abi.rs
 RUST_FLAGS := -C no-redzone=yes -C relocation-model=static -C code-model=small
 
 .PHONY: all clean run debug build-init fat-image
 
 all: $(IMAGE)
 
-$(INIT_BIN): makefile lumen.conf $(INIT_INPUTS)
+-include $(C_OBJ:.o=.d)
+
+$(INIT_BIN): makefile $(wildcard lumen.conf) $(INIT_INPUTS)
 	$(INIT_BUILD_COMMAND)
 
 $(NVMED_BIN): $(NVMED_INPUTS)
@@ -190,7 +164,7 @@ $(USER_HELLO_ELF): $(SRC_DIR)/user/hello/hello.c include/lumen/user/syslib.h $(S
 $(USER_HELLO_BIN): $(USER_HELLO_ELF)
 	$(OBJCOPY) -O binary $< $@
 
-$(SHELL_BIN):
+$(SHELL_BIN): $(SHELL_INPUTS)
 	$(SHELL_BUILD_COMMAND)
 
 $(SHELL_BLOB_O): $(SHELL_BLOB_S) $(SHELL_BIN)
@@ -233,6 +207,10 @@ $(IMAGE): $(BOOT) $(STAGE1) $(STAGE2) $(KERNEL)
 FAT_IMAGE ?= $(BUILD)/fat32.img
 QEMU_NVME_IMAGE ?= $(FAT_IMAGE)
 QEMU_CPUS ?= 4
+QEMU ?= qemu-system-x86_64
+QEMU_MEMORY ?= 256M
+QEMU_CPU ?= max
+QEMU_NET ?= -nic user,model=rtl8139
 
 fat-image: $(FAT_IMAGE)
 
@@ -250,23 +228,29 @@ $(QEMU_NVME_IMAGE):
 	truncate -s 64M $@
 endif
 
+QEMU_COMMON = -smp $(QEMU_CPUS) -m $(QEMU_MEMORY) -cpu $(QEMU_CPU) \
+              -drive format=raw,file=$(IMAGE) $(QEMU_DEVICES) $(QEMU_NET) -no-reboot -no-shutdown
+
 run: $(IMAGE) $(QEMU_NVME_IMAGE)
-	qemu-system-x86_64 \
-		-smp $(QEMU_CPUS) \
-		-drive format=raw,file=$(IMAGE) \
-		$(QEMU_DEVICES) \
-		-serial stdio \
-		-no-reboot -no-shutdown
+	$(QEMU) $(QEMU_COMMON) -serial stdio
 
 debug: $(IMAGE) $(QEMU_NVME_IMAGE)
-	qemu-system-x86_64 \
-		-smp $(QEMU_CPUS) \
-		-drive format=raw,file=$(IMAGE) \
-		$(QEMU_DEVICES) \
+	$(QEMU) $(QEMU_COMMON) \
 		-d int,cpu_reset,guest_errors \
 		-D qemu.log \
-		-no-reboot -no-shutdown \
 		-s -S
 
 clean:
-	rm -rf $(BUILD)
+	@if test -d "$(BUILD)"; then \
+		find "$(abspath $(BUILD))" -mindepth 1 -maxdepth 1 -exec sh -c '\
+			fat=$$1; nvme=$$2; shift 2; \
+			for artifact do \
+				case "$$fat" in "$$artifact"|"$$artifact"/*) continue;; esac; \
+				case "$$nvme" in "$$artifact"|"$$artifact"/*) continue;; esac; \
+				rm -rf -- "$$artifact" || exit; \
+			done' clean "$(abspath $(FAT_IMAGE))" "$(abspath $(QEMU_NVME_IMAGE))" {} +; \
+	fi
+
+include libc/libc.mk
+include ports/ports.mk
+include ports/x11/x11.mk

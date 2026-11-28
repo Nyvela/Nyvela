@@ -7,7 +7,7 @@
 #include "../arch/x86_64/context.h"
 #include "../ipc/ipc.h"
 
-#define KERNEL_STACK_SIZE_IN_PAGES 2
+#define KERNEL_STACK_SIZE_IN_PAGES 8
 
 typedef enum thread_state_t {
   THREAD_READY,
@@ -26,6 +26,7 @@ typedef struct thread_t {
   ipc_queue_t* queue;
 
   int64_t exit_code;
+  void *elf_process;
 } thread_t;
 
 _Static_assert(offsetof(thread_t, tid) == 0, "tid offset");
@@ -35,7 +36,8 @@ _Static_assert(offsetof(thread_t, state) == 24, "state offset");
 _Static_assert(offsetof(thread_t, queue) == 32, "queue offset");
 _Static_assert(offsetof(thread_t, exit_code) == 40, "exit_code offset");
 
-_Static_assert(sizeof(thread_t) == 48, "thread_t has unexpected size");
+_Static_assert(offsetof(thread_t, elf_process) == 48, "elf_process offset");
+_Static_assert(sizeof(thread_t) == 56, "thread_t has unexpected size");
 
 extern thread_t **threads;
 extern thread_t *current_thread;

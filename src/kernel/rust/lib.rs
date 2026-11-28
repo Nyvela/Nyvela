@@ -1,12 +1,18 @@
 #![no_std]
 #![deny(unsafe_op_in_unsafe_fn)]
 
+#[path = "../../../sdk/abi.rs"]
+mod abi;
 mod acpi;
 mod bindings;
 mod console;
 mod cpuinfo;
 mod exec;
+mod initrd;
+mod pci;
+mod ramfs;
 mod smp;
+mod user;
 
 use core::panic::PanicInfo;
 

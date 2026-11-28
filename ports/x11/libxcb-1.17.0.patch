@@ -1,0 +1,11 @@
+--- a/src/xcb_util.c
++++ b/src/xcb_util.c
+@@ -243 +243 @@
+-#ifdef HAVE_ABSTRACT_SOCKETS
++#if defined(HAVE_ABSTRACT_SOCKETS) && !defined(__lumen__)
+@@ -315 +315 @@
+-#ifdef HAVE_ABSTRACT_SOCKETS
++#if defined(HAVE_ABSTRACT_SOCKETS) && !defined(__lumen__)
+@@ -493 +493 @@
+-#ifdef HAVE_ABSTRACT_SOCKETS
++#if defined(HAVE_ABSTRACT_SOCKETS) && !defined(__lumen__)

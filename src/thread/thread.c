@@ -44,7 +44,9 @@ thread_t* allocate_thread() {
     return NULL;
   }
 
-  context_t *context = kmalloc(sizeof(context_t));
+  // FXSAVE requires a 16-byte aligned save area. Keep it in the same
+  // allocation as the integer context without changing the heap ABI.
+  context_t *context = kmalloc(sizeof(context_t) + 15 + 512);
 
   if (!context) {
     kfree(thread);
@@ -53,6 +55,10 @@ thread_t* allocate_thread() {
   }
 
   memset(context, 0, sizeof(context_t));
+  context->fx_state = ((uintptr_t)(context + 1) + 15) & ~15ULL;
+  memset((void *)context->fx_state, 0, 512);
+  *(uint16_t *)context->fx_state = 0x037F;
+  *(uint32_t *)(context->fx_state + 24) = 0x1F80;
 
   context->rsp = (uint64_t)kernel_stack + 4096 * KERNEL_STACK_SIZE_IN_PAGES;
   
@@ -125,6 +131,7 @@ thread_t* spawn_thread(void (*entry)(void), uint64_t cr3) {
   thread->tid = next_thread_id++;
   thread->state = THREAD_READY;
   thread->exit_code = 0;
+  thread->elf_process = NULL;
 
   if (threads_length >= threads_cap) {
     uint64_t new_cap = threads_cap * 2;

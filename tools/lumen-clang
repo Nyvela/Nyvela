@@ -1,0 +1,29 @@
+#!/bin/sh
+set -eu
+clang=${CLANG:-clang}
+tool_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+sysroot=${LUMEN_SYSROOT:-$tool_dir/../build/libc/sysroot}
+include=$sysroot/include
+lib=$sysroot/lib
+if [ ! -r "$lib/liblumen_musl.a" ] || [ ! -r "$lib/libc.a" ]; then
+    echo "Build Lumen's musl sysroot with make libc first" >&2
+    exit 1
+fi
+resource=$("$clang" --print-resource-dir)
+
+for arg do
+    case "$arg" in
+        -c|-S|-E|-M|-MM|-fsyntax-only)
+            exec "$clang" --target=x86_64-linux-musl -fno-pie -nostdinc \
+                -isystem "$resource/include" -isystem "$include" "$@"
+            ;;
+    esac
+done
+
+builtins=$("$clang" --target=x86_64-linux-musl --print-libgcc-file-name --rtlib=compiler-rt)
+exec "$clang" --target=x86_64-linux-musl -fno-pie -nostdinc \
+    -isystem "$resource/include" -isystem "$include" \
+    -fuse-ld=lld -static -nostdlib -L"$lib" \
+    -Wl,-no-pie,--image-base=0x50000000,--gc-sections \
+    "$lib/crt1.o" "$lib/crti.o" "$@" \
+    -Wl,--start-group "$lib/libc.a" "$lib/liblumen_musl.a" "$builtins" -Wl,--end-group "$lib/crtn.o"

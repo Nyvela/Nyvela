@@ -1,0 +1,140 @@
+--- a/include/meson.build
++++ b/include/meson.build
+@@ -146 +146 @@
+-conf_data.set('HAVE_EPOLL_CREATE1', cc.has_function('epoll_create1') ? '1' : false)
++conf_data.set('HAVE_EPOLL_CREATE1', host_machine.system() != 'lumen' and cc.has_function('epoll_create1') ? '1' : false)
+@@ -194 +194 @@
+-if cc.has_header_symbol('sys/socket.h', 'SCM_RIGHTS')
++if host_machine.system() != 'lumen' and cc.has_header_symbol('sys/socket.h', 'SCM_RIGHTS')
+--- a/os/utils.c
++++ b/os/utils.c
+@@ -242 +242 @@
+-#if !defined(WIN32) || defined(__CYGWIN__)
++#if (!defined(WIN32) || defined(__CYGWIN__)) && !defined(__lumen__)
+--- a/hw/vfb/meson.build
++++ b/hw/vfb/meson.build
+@@ -12,0 +13,2 @@
++    link_depends: host_machine.system() == 'lumen' ? [get_option('lumen_platform')] : [],
++    link_args: host_machine.system() == 'lumen' ? [get_option('lumen_platform')] : [],
+--- a/meson_options.txt
++++ b/meson_options.txt
+@@ -8,0 +9 @@
++option('lumen_platform', type: 'string', description: 'Lumen X11 platform archive')
+--- a/hw/vfb/InitOutput.c
++++ b/hw/vfb/InitOutput.c
+@@ -105,0 +106,17 @@
++#ifdef __lumen__
++const void *
++lumen_x11_framebuffer(size_t *stride);
++
++const void *
++lumen_x11_framebuffer(size_t *stride)
++{
++    ScreenPtr screen = screenInfo.numScreens == 1 ? screenInfo.screens[0] : NULL;
++    if (!screen || screen->width != 640 || screen->height != 400 ||
++        screen->rootDepth != 24)
++        return NULL;
++    PixmapPtr pixmap = screen->GetScreenPixmap(screen);
++    *stride = pixmap->devKind / sizeof(CARD32);
++    return pixmap->devPrivate.ptr;
++}
++#endif
++
+--- a/hw/vfb/InitInput.c
++++ b/hw/vfb/InitInput.c
+@@ -126,0 +127,52 @@
++#ifdef __lumen__
++#include <stdint.h>
++#include "inpututils.h"
++
++extern int64_t lumen_x11_acquire(void);
++extern unsigned lumen_x11_key(void);
++extern int64_t lumen_x11_pointer(int *dx, int *dy, unsigned *buttons);
++extern const void *lumen_x11_framebuffer(size_t *stride);
++extern void lumen_x11_present(const void *pixels, size_t stride);
++
++static DeviceIntPtr lumen_pointer, lumen_keyboard;
++static OsTimerPtr lumen_timer;
++static unsigned lumen_buttons;
++
++static CARD32
++lumen_seat_tick(OsTimerPtr timer, CARD32 now, void *data)
++{
++    int dx, dy;
++    unsigned event, buttons;
++    ValuatorMask mask;
++    size_t stride;
++    const void *pixels;
++
++    while ((event = lumen_x11_key()) != 0) {
++        if (event != 1)
++            QueueKeyboardEvents(lumen_keyboard, event & 0x100 ? KeyPress : KeyRelease,
++                                event & 0xff);
++    }
++    while (lumen_x11_pointer(&dx, &dy, &buttons) > 0) {
++        static const int button_map[] = { 1, 3, 2 };
++        if (dx || dy) {
++            const int delta[] = { dx, dy };
++            valuator_mask_set_range(&mask, 0, 2, delta);
++            QueuePointerEvents(lumen_pointer, MotionNotify, 0, POINTER_RELATIVE, &mask);
++        }
++        for (int i = 0; i < 3; i++) {
++            unsigned bit = 1U << i;
++            if ((lumen_buttons ^ buttons) & bit) {
++                valuator_mask_zero(&mask);
++                QueuePointerEvents(lumen_pointer, buttons & bit ? ButtonPress : ButtonRelease,
++                                   button_map[i], POINTER_RELATIVE, &mask);
++            }
++        }
++        lumen_buttons = buttons;
++    }
++    pixels = lumen_x11_framebuffer(&stride);
++    if (pixels)
++        lumen_x11_present(pixels, stride);
++    return 20;
++}
++#endif
++
+@@ -139,0 +192,8 @@
++#ifdef __lumen__
++    if (lumen_x11_acquire() < 0)
++        FatalError("Could not acquire the Lumen display seat");
++    lumen_pointer = p;
++    lumen_keyboard = k;
++    lumen_buttons = 0;
++    lumen_timer = TimerSet(NULL, 0, 20, lumen_seat_tick, NULL);
++#endif
+@@ -144,0 +205,4 @@
++#ifdef __lumen__
++    TimerFree(lumen_timer);
++    lumen_timer = NULL;
++#endif
+--- a/xkb/ddxLoad.c
++++ b/xkb/ddxLoad.c
+@@ -367,0 +368,11 @@
++#ifdef __lumen__
++    /* The build host compiles the US keymap shipped with the session. */
++    *xkbRtrn = NULL;
++    strlcpy(nameRtrn, "lumen-us", nameRtrnLen);
++    FILE *keymap = fopen("/usr/share/X11/xkb/lumen-us.xkm", "rb");
++    if (!keymap)
++        return 0;
++    unsigned missing = XkmReadFile(keymap, need, want, xkbRtrn);
++    fclose(keymap);
++    return *xkbRtrn ? (need | want) & ~missing : 0;
++#else
+@@ -389,0 +401 @@
++#endif
+--- a/meson.build
++++ b/meson.build
+@@ -102 +102 @@
+-xfont2_dep = dependency('xfont2', version: '>= 2.0')
++xfont2_dep = dependency('xfont2', version: '>= 2.0', static: host_machine.system() == 'lumen')
+@@ -343 +343,6 @@
+-        md_dep = cc.find_library('md', required: false)
++        md_dirs = []
++        if host_machine.system() == 'lumen'
++            fs = import('fs')
++            md_dirs += fs.parent(get_option('lumen_platform'))
++        endif
++        md_dep = cc.find_library('md', required: false, dirs: md_dirs)

@@ -1,7 +1,3 @@
-section .data
-  CONTEXT_T_SIZE equ 168
-  UINT64_T_SIZE equ 8
-
 section .bss
   rsp_reg resq 1
 
@@ -21,7 +17,7 @@ section .text
 ; [  rip     ]
 ; [   ra     ] <- rsp at save_context entry
 save_context:
-  mov [rsp_reg], rsp
+  mov [rel rsp_reg], rsp
 
   ; [rsp_reg + 8] - rip
   ; [rsp_reg + 16] - cs
@@ -53,7 +49,9 @@ save_context:
   mov rax, [rel current_thread]
   mov rax, [rax + 8] ; context_t*
 
-  mov rdx, [rsp_reg]
+  mov rdx, [rax + 176]
+  fxsave64 [rdx]
+  mov rdx, [rel rsp_reg]
 
   mov rdi, [rdx + 16] ; cs
   mov [rax + 144], rdi
@@ -128,7 +126,7 @@ save_context:
   pop rdi ; move rax's value to rdi
   mov [rax], rdi
 
-  mov rsp, [rsp_reg]
+  mov rsp, [rel rsp_reg]
   ret
   
   .err:
@@ -148,7 +146,7 @@ save_context:
     pop rdi
     pop rax
 
-    mov rsp, [rsp_reg]
+    mov rsp, [rel rsp_reg]
     xor rax, rax
     ret
 
@@ -172,6 +170,14 @@ switch_context:
   .load_cr3:
     mov cr3, rax
 
+  mov rcx, [rdi + 176]
+  fxrstor64 [rcx]
+  mov ecx, 0xC0000100 ; IA32_FS_BASE
+  mov rax, [rdi + 168]
+  mov rdx, rax
+  shr rdx, 32
+  wrmsr
+
   mov rdx, [rdi + 144]
   and rdx, 3
   jz .ring0
@@ -182,7 +188,7 @@ switch_context:
     
     ; normalise rflags
     mov rax, [rdi + 136]
-    and rax, 0x37FFD7
+    and rax, 0x378FD7
     or rax, 2
 
     push rax

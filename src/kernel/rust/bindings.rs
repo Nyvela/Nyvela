@@ -12,8 +12,15 @@ unsafe extern "C" {
     // include/lumen/mm/{pmm,vmm}.h
     pub(super) fn kpalloc() -> *mut u8;
     pub(super) fn kpalloc_contiguous(pages: u64) -> *mut u8;
+    pub(super) fn kpfree_contiguous(page: *mut u8, pages: u64);
     pub(super) fn kpfree(page: *mut u8);
     pub(super) fn kget_pte_addr_at(cr3: u64, virt: u64) -> *const u64;
     pub(super) fn kvmmap_at(cr3: u64, virt: u64, phys: u64, flags: u64) -> bool;
+    pub(super) fn kvmunmap_and_free_at(cr3: u64, virt: u64) -> bool;
+    pub(super) fn kvmunmap_at(cr3: u64, virt: u64) -> bool;
     pub(super) static kernel_cr3: u64;
+
+    pub(super) fn kmalloc(size: u64) -> *mut u8;
+    pub(super) fn kfree(pointer: *mut u8);
+    pub(super) fn vfs_read(path: *const c_char, output: *mut u8, len: u64, offset: u64) -> i64;
 }

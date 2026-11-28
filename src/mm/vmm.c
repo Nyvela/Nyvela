@@ -102,7 +102,7 @@ uint64_t* kget_pte_addr(uint64_t virt) {
 
 uint64_t kget_phys_page_addr_at(uint64_t cr3, uint64_t virt) {
   uint64_t *pte = kget_pte_addr_at(cr3, virt);
-  return pte ? (*pte & ~0xFFFULL) : 0;
+  return pte ? (*pte & 0x000FFFFFFFFFF000ULL) : 0;
 }
 
 uint64_t kget_phys_page_addr(uint64_t virt) {
@@ -118,7 +118,7 @@ bool kvmunmap_and_free_at(uint64_t cr3, uint64_t virt) {
     return false;
   }
 
-  uint64_t phys = *pte & ~0xFFFULL;
+  uint64_t phys = *pte & 0x000FFFFFFFFFF000ULL;
 
   kpfree((void*)phys);
   *pte = 0;
@@ -178,8 +178,8 @@ bool kvmmap_at(uint64_t cr3, uint64_t virt, uint64_t phys, uint64_t flags) {
     pdpt_phys = (uint64_t)kpalloc();
 
     if (!pdpt_phys) {
-      kprintferr("Failed to allocate PDPT entry.", 0x0F);
-      hang();
+      write_flags(_flags);
+      return false;
     }
      
     pdpt = (uint64_t*)pdpt_phys;
@@ -203,8 +203,8 @@ bool kvmmap_at(uint64_t cr3, uint64_t virt, uint64_t phys, uint64_t flags) {
     pd_phys = (uint64_t)kpalloc();
 
     if (!pd_phys) {
-      kprintferr("Failed to allocate PD entry.", 0x0F);
-      hang();
+      write_flags(_flags);
+      return false;
     }
      
     pd = (uint64_t*)pd_phys;
@@ -228,8 +228,8 @@ bool kvmmap_at(uint64_t cr3, uint64_t virt, uint64_t phys, uint64_t flags) {
     pt_phys = (uint64_t)kpalloc();
 
     if (!pt_phys) {
-      kprintferr("Failed to allocate PD entry.", 0x0F);
-      hang();
+      write_flags(_flags);
+      return false;
     }
      
     pt = (uint64_t*)pt_phys;

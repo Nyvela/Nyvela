@@ -1,6 +1,7 @@
 #include "../../../include/lumen/drivers/kbd/kbd.h"
 #include "../../../include/lumen/arch/x86_64/asm/io.h"
 #include "../../../include/lumen/arch/x86_64/pic/pic.h"
+#include <lumen/kernel/rust.h>
 
 #define KBD_DATA 0x60
 #define KBD_STATUS 0x64
@@ -67,6 +68,7 @@ static void kbd_push(char c) {
 }
 
 static void kbd_handle_code(uint8_t code) {
+  if (lumen_graphics_key(code)) return;
   if (code == 0xE0) {
     kbd_e0 = true;
     return;
@@ -120,14 +122,27 @@ static void kbd_handle_code(uint8_t code) {
   kbd_push(c);
 }
 
-void kbd_irq_handler(void) {
+static void ps2_read_pending(void) {
   for (int i = 0; i < 8; i++) {
-    if (!(inb(KBD_STATUS) & KBD_OUT_FULL)) break;
-
-    kbd_handle_code(inb(KBD_DATA));
+    uint8_t status = inb(KBD_STATUS);
+    if (!(status & KBD_OUT_FULL)) break;
+    uint8_t byte = inb(KBD_DATA);
+    if (status & 0x20) {
+      lumen_graphics_mouse(byte);
+    } else {
+      kbd_handle_code(byte);
+    }
   }
+}
 
+void kbd_irq_handler(void) {
+  ps2_read_pending();
   kpic_eoi(1);
+}
+
+void mouse_irq_handler(void) {
+  ps2_read_pending();
+  kpic_eoi(12);
 }
 
 void kbd_init(void) {

@@ -1,7 +1,6 @@
 #include "../../../../include/lumen/arch/x86_64/fault.h"
 #include "../../../../include/lumen/drivers/video/console/console.h"
 #include "../../../../include/lumen/arch/x86_64/asm/cpu.h"
-#include "../../../../include/lumen/scheduler/scheduler.h"
 
 static void put_hex64(uint64_t v) {
   char buf[19];
@@ -16,22 +15,6 @@ static void put_hex64(uint64_t v) {
 
   buf[18] = '\0';
   kprints(buf, 0x0F);
-}
-
-static void put_bytes(const uint8_t *p) {
-  for (int i = 0; i < 16; i++) {
-    char b[3];
-    uint8_t v = p[i];
-
-    b[0] = "0123456789abcdef"[v >> 4];
-    b[1] = "0123456789abcdef"[v & 0xF];
-    b[2] = '\0';
-
-    kprints(b, 0x0F);
-    kprints(" ", 0x0F);
-  }
-
-  kprintnl();
 }
 
 void fault_dump(uint64_t vec, uint64_t err, uint64_t has_err, uint64_t *frame) {
@@ -82,32 +65,5 @@ void fault_dump(uint64_t vec, uint64_t err, uint64_t has_err, uint64_t *frame) {
   put_hex64(read_cr3() & ~0xFFFULL);
   kprintnl();
 
-  kprints("code: ", 0x0F);
-  put_bytes((const uint8_t *)rip);
-
   hang();
-}
-
-void fault_recovery() {
-  thread_t *t = current_thread;
-
-  if (!t) {
-    scheduler_tick();
-  }
-
-  for (uint64_t i = 0; i < threads_length; i++) {
-    if (threads[i] == t) {
-      for (uint64_t j = i; j + 1 < threads_length; j++) 
-        threads[j] = threads[j + 1];
-      
-      threads_length--;
-      break;
-    }
-  }
-
-  kprints("Killed thread with ID of ", 0x0F);
-  put_hex64(t->tid);
-
-  free_thread(t);
-  scheduler_tick();
 }

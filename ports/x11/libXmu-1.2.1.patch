@@ -1,0 +1,7 @@
+--- a/src/LocBitmap.c
++++ b/src/LocBitmap.c
+@@ -98,0 +99,4 @@
++#ifdef __lumen__
++#undef BITMAPDIR
++#define BITMAPDIR "/usr/share/X11/bitmaps"
++#endif

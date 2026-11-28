@@ -1,13 +1,18 @@
 # Syscalls
 
-Everything user programs can reach goes through `int $0x80`.
+Lumen programs enter through `int $0x80`. Boot services use the original
+flat-image operation table below. ELF applications share the console, IPC
+and timing operations and use the native application calls in `sdk/abi.rs`
+for file handles, memory, sockets, display and sessions. See
+[Native application calls](native.md) for the contracts. The
+[Lumen musl port](ports.md) implements POSIX calls in userspace.
 
 ## ABI
 
 | register | role |
 |----------|------|
 | `rax` | syscall number on entry, return value on exit |
-| `rdi`, `rsi`, `rdx`, `r10` | arguments 1..4 |
+| `rdi`, `rsi`, `rdx`, `r10`, `r8`, `r9` | application arguments 1..6 |
 | `rcx`, `r11` | clobbered |
 
 Returns are byte counts on success, or a negative `VFS_ERR_*` cast to `u64` on
@@ -38,7 +43,7 @@ failure.
 | 12 | `fs_read` | `path`, `buf`, `len`, `offset=r10` | `vfs_read` |
 | 13 | `fs_list` | `path`, `buf`, `len` | newline-separated names plus NUL, returns bytes excluding NUL |
 | 14 | `fs_size` | `path` | size in bytes |
-| 20 | `exec` | `path` | runs a ramfs file in the `0x500000` slot in a child thread with a fresh address space, blocks until exit, returns its exit code; file must be `<= PROG_MAX` |
+| 20 | `exec` | `path`, `args`, `args_len` | runs a RAMFS program in a child address space, waits and returns its exit code. ELF arguments are up to 512 bytes of NUL-terminated strings. Flat programs use the 64 KiB slot at `0x500000`. |
 | 21 | `create_thread` | `entry`, `as_id`, `rsp` | spawns a ring3 thread in the given address space, returns `tid` |
 | 22 | `free_thread` | `tid` | frees a thread handle |
 | 30 | `as_create` | - | creates an address space, returns its id |
@@ -61,9 +66,8 @@ NUL-terminated within `SYSCALL_MAX_PATH` (256) bytes, buffers are capped at
 `SYSCALL_MAX_BUF` (2048). Each syscall copies through a `kmalloc` bounce buffer
 rather than touching user memory directly.
 
-The range check exists because user threads currently share one flat layout, so a
-bad pointer is only caught by range, not by ownership. Once address spaces are
-properly isolated this should be tightened to per-space validation.
+Path and buffer copies also verify the caller's page-table permissions.
+The legacy address-space and device syscalls are used by trusted boot services.
 
 ## Interrupts
 

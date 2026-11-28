@@ -66,7 +66,7 @@ void* kpalloc() {
     if (BITMAP[page / 8] & (BITMAP_FREE << (page % 8))) {
       uint64_t phys = page * 0x1000;
 
-      if (phys >= 0x400000 && phys < 0x600000) continue;
+      if (phys >= 0x400000 && phys < 0x800000) continue;
 
       BITMAP[page / 8] &= ~(BITMAP_FREE << (page % 8));
       
@@ -87,7 +87,7 @@ void* kpalloc_top(void) {
   for (uint64_t page = FRAME_COUNT; page-- > first_page;) {
     if (BITMAP[page / 8] & (BITMAP_FREE << (page % 8))) {
       uint64_t phys = page * 0x1000;
-      if (phys >= 0x400000 && phys < 0x600000) continue;
+      if (phys >= 0x400000 && phys < 0x800000) continue;
       
       BITMAP[page / 8] &= ~(BITMAP_FREE << (page % 8));
       
@@ -121,7 +121,7 @@ void* kpalloc_contiguous(uint64_t pages) {
  
     for (uint64_t i = 0; i < pages; i++) {
       uint64_t phys = (page + i) * 0x1000;
-      if (phys >= 0x400000 && phys < 0x600000) {
+      if (phys >= 0x400000 && phys < 0x800000) {
         ok = false;
         break;
       }

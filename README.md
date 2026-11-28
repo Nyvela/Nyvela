@@ -20,19 +20,23 @@ Working:
 - a userspace init that spawns a separate ring3 shell
 - FAT32 file and directory operations on an NVMe namespace through Lumfat
 - ACPI processor discovery and Rust kernel workers on secondary xAPIC CPUs
+- static x86-64 ELF processes with private address spaces and native Lumen syscalls and a musl libc port
+- Rust `std`, SQLite and DoomGeneric applications
+- QEMU Standard VGA graphics, PS/2 pointer input and RTL8139 IPv4 networking
+- X.Org and JWM desktop with local accounts backed by NVMe
 
 The boot processor runs the userspace scheduler. Secondary processors run
-explicitly dispatched Rust kernel jobs. ELF loading is still on the roadmap.
+explicitly dispatched Rust kernel jobs.
 
 ## Quick start
 
 You need `gcc` with C23 support, `nasm`, `ld`, `objcopy`, `make`,
-`qemu-system-x86_64`, and Rust 1.85 or later. Install the freestanding Rust
+`qemu-system-x86_64`, and Rust 1.88 or later. Install the freestanding Rust
 target with `rustup target add x86_64-unknown-none`. Install `dosfstools` to
 create the default FAT32 disk on the first boot.
 
-Clone the userspace dependencies next to the kernel checkout. Point
-`lumen.conf` at their locations if you use a different directory layout.
+Clone the userspace services and Rust drivers alongside the kernel checkout.
+`lumen.conf` can override the legacy service paths.
 
 ```sh
 git clone https://github.com/amogus-gggy/Lumd.git
@@ -40,6 +44,10 @@ git clone https://github.com/amogus-gggy/Lumsh.git
 git clone https://github.com/amogus-gggy/Lpcid.git
 git clone https://github.com/amogus-gggy/nvmed-rs.git
 git clone https://github.com/amogus-gggy/Lumfat.git
+git clone https://github.com/amogus-gggy/Lumfw.git
+git clone https://github.com/amogus-gggy/Lumgfx.git
+git clone https://github.com/amogus-gggy/Lumeth.git
+git clone https://github.com/amogus-gggy/Lumouse.git
 ```
 
 Example config:
@@ -80,6 +88,10 @@ At the Lumen prompt in the QEMU window, type `run fat`. Inside `fat`, use
 `ls`, `cat <path>`, `mkdir <path>`, `write <path> <text>`, and `exit`.
 Changes persist in `build/fat32.img`.
 
+Build and boot the optional ELF application archive with `make run-ports`.
+See [Static ELF applications](docs/ports.md) for dependencies, examples and
+toolchain commands. Run `make run-desktop` for the [X11 login and desktop](docs/desktop.md).
+
 ## Shape of it
 
 ```
@@ -104,7 +116,11 @@ src/mm/             pmm.c, vmm.c, heap.c
 src/thread/         threads and context switching
 src/syscall/        the int 0x80 dispatcher
 src/fs/             vfs.c, ramfs.c
-src/exec/           flat binary loader
+src/exec/           legacy flat binary loader
+src/kernel/rust/user/ ELF process loader, syscall ABI and device integration
+ports/              ELF applications and build rules
+libc/               Lumen musl build and system interface
+desktop/            Login manager, X11 session supervisor and development desktop
 src/as/             address spaces
 src/ipc/            inter-thread messages
 src/user/           hello/, ld/ (prog.ld), blobs/
@@ -121,6 +137,8 @@ The `docs/` directory has the detail:
 | [Build system](docs/build.md) | `lumen.conf`, toolchains, linker scripts, flat binaries, adding a user program |
 | [Syscalls](docs/syscall.md) | the `int 0x80` ABI and full table, validation rules |
 | [Userspace](docs/userspace.md) | threads, address spaces, memory layout, init bootstrap, IPC |
+| [X11 desktop](docs/desktop.md) | graphical login, accounts, JWM and X.Org applications |
+| [Static ELF applications](docs/ports.md) | Rust and Clang toolchains, SQLite, Doom and IPv4 networking |
 | [Debugging](docs/debugging.md) | GDB recipes, capturing the console, troubleshooting table |
 
 ## Roadmap
@@ -142,8 +160,8 @@ The `docs/` directory has the detail:
 - [x] Threads and a round-robin scheduler
 - [x] Address spaces (`as_create` / `as_map` / `as_free`)
 - [x] Syscalls (`int $0x80`)
-- [ ] Fault recovery - handlers currently log and halt
-- [ ] IST stacks so a ring3 fault cannot take the kernel down
+- [x] Terminate and reap faulting foreground ELF processes
+- [x] IST stacks for page faults and double faults
 - [x] Start secondary xAPIC processors and run Rust kernel jobs
 - [ ] Schedule userspace threads on secondary processors
 
@@ -157,15 +175,15 @@ The `docs/` directory has the detail:
 - [x] FAT32 file and directory operations over NVMe IPC
 - [x] Detach the init program fully from the kernel
 - [x] IPC: receive side, and move the scratch address off the target's code page
-- [ ] Thread reaping, and ownership-checked user pointers
-- [ ] ELF loader, so user programs stop needing a flat binary at a fixed base
+- [x] ELF foreground process reaping and page-checked syscall buffers
+- [x] Static x86-64 ELF loader
 
 ### Graphics
 
 - [x] VGA text-mode console
 - [x] PS/2 keyboard input
-- [ ] Framebuffer support
-- [ ] Graphical interface
+- [x] QEMU Standard VGA linear framebuffer
+- [x] X.Org and JWM with graphical login
 
 ## Contributing
 
